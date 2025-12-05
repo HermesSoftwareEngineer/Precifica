@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat com IA - Precifica</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Custom scrollbar for sidebar */
+        .scrollbar-thin::-webkit-scrollbar { width: 6px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
+        
+        /* Markdown content styles */
+        .prose p { margin-bottom: 0.75em; }
+        .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.75em; }
+        .prose ol { list-style-type: decimal; padding-left: 1.5em; margin-bottom: 0.75em; }
+        .prose pre { background-color: #1e293b; color: #f8fafc; padding: 1em; border-radius: 0.5em; overflow-x: auto; margin-bottom: 1em; }
+        .prose code { background-color: rgba(0,0,0,0.05); padding: 0.2em 0.4em; border-radius: 0.25em; font-family: monospace; font-size: 0.9em; }
+        .prose pre code { background-color: transparent; padding: 0; color: inherit; }
+        .message-user .prose code { background-color: rgba(255,255,255,0.2); }
+    </style>
+</head>
+<body class="bg-white h-screen flex overflow-hidden">
+    
+    <!-- Sidebar -->
+    <aside class="w-64 bg-slate-50 border-r border-slate-200 flex flex-col flex-shrink-0">
+        <div class="p-4 border-b border-slate-200">
+            <a href="{{ url_for('home') }}" class="text-slate-500 hover:text-blue-600 text-sm font-medium flex items-center gap-1 mb-4 transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                Voltar
+            </a>
+            <button id="new-chat-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2.5 px-4 rounded-lg font-semibold text-sm transition-colors flex items-center justify-center gap-2 shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Nova Conversa
+            </button>
+        </div>
+        
+        <div class="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-thin" id="threads-list">
+            <!-- Threads will be inserted here -->
+        </div>
+    </aside>
+
+    <!-- Main Chat Area -->
+    <main class="flex-1 flex flex-col bg-white min-w-0">
+        <header class="h-16 border-b border-slate-200 flex items-center px-6 bg-white flex-shrink-0">
+            <h1 class="text-lg font-bold text-slate-800">Assistente Virtual</h1>
+        </header>
+
+        <div id="chat-box" class="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin">
+            <div class="h-full flex flex-col items-center justify-center text-slate-400 empty-state-chat">
+                <svg class="w-16 h-16 mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                <p class="text-lg font-medium">Selecione uma conversa ou inicie uma nova</p>
+            </div>
+        </div>
+        
+        <div class="p-6 border-t border-slate-200 bg-white">
+            <form id="chat-form" class="max-w-4xl mx-auto relative">
+                <input type="text" id="user-input" 
+                    class="w-full pl-4 pr-12 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-slate-800 placeholder-slate-400" 
+                    placeholder="Digite sua mensagem..." autocomplete="off">
+                <button type="submit" id="send-btn" 
+                    class="absolute right-2 top-2 p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                </button>
+            </form>
+        </div>
+    </main>
+
+    <script>
+        const chatBox = document.getElementById('chat-box');
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const threadsList = document.getElementById('threads-list');
+        const newChatBtn = document.getElementById('new-chat-btn');
+
+        let currentThreadId = null;
+
+        marked.setOptions({ breaks: true, gfm: true });
+
+        function appendMessage(role, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `flex w-full ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = `max-w-[85%] rounded-2xl px-5 py-3.5 text-sm leading-relaxed shadow-sm ${
+                role === 'user' 
+                ? 'bg-blue-600 text-white message-user rounded-br-none' 
+                : 'bg-slate-100 text-slate-800 prose rounded-bl-none'
+            }`;
+            
+            if (role === 'ai') {
+                contentDiv.innerHTML = marked.parse(content);
+            } else {
+                contentDiv.textContent = content;
+            }
+            
+            messageDiv.appendChild(contentDiv);
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function loadThreads() {
+            try {
+                const response = await fetch('/api/chat/threads');
+                const threads = await response.json();
+                
+                threadsList.innerHTML = '';
+                threads.forEach(thread => {
+                    const threadEl = document.createElement('div');
+                    threadEl.className = `px-3 py-2.5 rounded-lg cursor-pointer text-sm truncate transition-colors ${
+                        thread.id === currentThreadId 
+                        ? 'bg-white text-blue-600 font-semibold shadow-sm border border-slate-200' 
+                        : 'text-slate-600 hover:bg-slate-200/50'
+                    }`;
+                    threadEl.textContent = thread.titulo;
+                    threadEl.dataset.id = thread.id;
+                    
+                    threadEl.addEventListener('click', () => switchThread(thread.id));
+                    threadsList.appendChild(threadEl);
+                });
+
+                // Don't auto-select or auto-create. Just let the user choose or start typing.
+                if (currentThreadId) {
+                    // If we have an ID (e.g. from URL param in future, or preserved state), highlight it
+                    const activeEl = document.querySelector(`[data-id="${currentThreadId}"]`);
+                    if (activeEl) {
+                        activeEl.classList.remove('text-slate-600', 'hover:bg-slate-200/50');
+                        activeEl.classList.add('bg-white', 'text-blue-600', 'font-semibold', 'shadow-sm', 'border', 'border-slate-200');
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao carregar conversas:', error);
+            }
+        }
+
+        function resetUIForNewChat() {
+            currentThreadId = null;
+            
+            // Clear active state in sidebar
+            Array.from(threadsList.children).forEach(el => {
+                el.className = 'px-3 py-2.5 rounded-lg cursor-pointer text-sm truncate transition-colors text-slate-600 hover:bg-slate-200/50';
+            });
+
+            // Show empty state
+            chatBox.innerHTML = `
+                <div class="h-full flex flex-col items-center justify-center text-slate-400 empty-state-chat">
+                    <svg class="w-16 h-16 mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                    <p class="text-lg font-medium">Nova conversa</p>
+                    <p class="text-sm text-slate-400 mt-2">Digite abaixo para começar</p>
+                </div>
+            `;
+            
+            userInput.value = '';
+            userInput.focus();
+        }
+
+        async function switchThread(threadId) {
+            currentThreadId = threadId;
+            
+            // Update active state in sidebar
+            Array.from(threadsList.children).forEach(el => {
+                const isActive = el.dataset.id === threadId;
+                el.className = `px-3 py-2.5 rounded-lg cursor-pointer text-sm truncate transition-colors ${
+                    isActive 
+                    ? 'bg-white text-blue-600 font-semibold shadow-sm border border-slate-200' 
+                    : 'text-slate-600 hover:bg-slate-200/50'
+                }`;
+            });
+
+            // Focus input
+            userInput.focus();
+
+            // Load history
+            chatBox.innerHTML = '';
+            try {
+                const response = await fetch(`/api/chat/history?thread_id=${threadId}`);
+                const messages = await response.json();
+                
+                if (messages.length === 0) {
+                    chatBox.innerHTML = '<div class="h-full flex flex-col items-center justify-center text-slate-400"><p>Inicie a conversa...</p></div>';
+                } else {
+                    messages.forEach(msg => appendMessage(msg.role, msg.content));
+                }
+            } catch (error) {
+                console.error('Erro ao carregar histórico:', error);
+                chatBox.innerHTML = '<div class="text-red-500 text-center mt-4">Erro ao carregar histórico.</div>';
+            }
+        }
+
+        newChatBtn.addEventListener('click', resetUIForNewChat);
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const message = userInput.value.trim();
+            
+            if (!message) return;
+            
+            // If no thread selected, create one first
+            if (!currentThreadId) {
+                try {
+                    const response = await fetch('/api/chat/threads', { method: 'POST' });
+                    if (!response.ok) throw new Error('Falha ao criar thread');
+                    const thread = await response.json();
+                    currentThreadId = thread.id;
+                    
+                    // Refresh list to show new thread in sidebar
+                    await loadThreads();
+                } catch (error) {
+                    console.error('Erro ao criar nova conversa:', error);
+                    alert('Erro ao iniciar nova conversa. Tente novamente.');
+                    return;
+                }
+            }
+
+            // Remove empty state
+            if (chatBox.querySelector('.text-slate-400')) {
+                chatBox.innerHTML = '';
+            }
+
+            appendMessage('user', message);
+            userInput.value = '';
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/chat/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        message: message,
+                        thread_id: currentThreadId
+                    })
+                });
+                
+                if (!response.ok) throw new Error('Erro na requisição');
+                
+                const data = await response.json();
+                appendMessage('ai', data.response);
+                
+                // Reload threads to update title if it's the first message
+                // We can optimize this to only do it if it was empty before, but this is fine.
+                loadThreads();
+                
+            } catch (error) {
+                console.error('Erro ao enviar mensagem:', error);
+                appendMessage('error', 'Erro ao se comunicar com o servidor.');
+            } finally {
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+            }
+        });
+
+        // Initial load
+        loadThreads();
+    </script>
+</body>
+</html>

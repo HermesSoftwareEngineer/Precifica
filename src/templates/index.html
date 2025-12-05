@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Precifica - Avaliações de Imóveis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+    <header class="bg-white border-b border-slate-200 py-5 mb-10 shadow-sm">
+        <div class="container mx-auto px-4 flex justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold text-blue-600">Precifica</h1>
+                <p class="text-slate-500 text-sm">Sistema Inteligente de Avaliação Imobiliária</p>
+            </div>
+            <a href="{{ url_for('chat_page') }}" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-semibold transition-colors flex items-center gap-2">
+                💬 Falar com IA
+            </a>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 pb-20">
+        <section>
+            <h2 class="text-xl font-semibold mb-6 text-slate-700">Avaliações Recentes</h2>
+            
+            {% if avaliacoes %}
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {% for avaliacao in avaliacoes %}
+                    <a href="{{ url_for('detalhes_avaliacao', id=avaliacao.id) }}" class="block group">
+                        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden transition-all duration-200 group-hover:-translate-y-1 group-hover:shadow-lg">
+                            <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                <span class="px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wide {{ 'bg-blue-100 text-blue-800' if avaliacao.finalidade == 'venda' else 'bg-green-100 text-green-800' }}">
+                                    {{ avaliacao.finalidade|upper }}
+                                </span>
+                                <span class="text-xs text-slate-500">{{ avaliacao.data_avaliacao }}</span>
+                            </div>
+                            <div class="p-5">
+                                <h3 class="text-base font-semibold mb-4 line-clamp-2 h-12 text-slate-800">{{ avaliacao.endereco }}</h3>
+                                <div class="flex justify-between items-end mt-3">
+                                    <div class="flex flex-col">
+                                        <span class="text-[10px] text-slate-500 uppercase font-medium">Área</span>
+                                        <span class="font-semibold text-sm">{{ avaliacao.area_m2 }} m²</span>
+                                    </div>
+                                    <div class="flex flex-col items-end">
+                                        <span class="text-[10px] text-slate-500 uppercase font-medium">Estimativa</span>
+                                        <span class="text-blue-600 font-bold text-lg">R$ {{ "{:,.2f}".format(avaliacao.preco_estimado).replace(',', 'X').replace('.', ',').replace('X', '.') }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center py-16 bg-white rounded-xl border border-slate-200 text-slate-500">
+                    <p>Nenhuma avaliação encontrada.</p>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+
+    <footer class="mt-auto py-10 text-center text-slate-500 text-sm border-t border-slate-200 bg-white">
+        <div class="container mx-auto px-4">
+            <p>&copy; 2025 Precifica. Todos os direitos reservados.</p>
+        </div>
+    </footer>
+</body>
+</html>
