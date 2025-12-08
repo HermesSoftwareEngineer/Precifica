@@ -1,10 +1,10 @@
 from dotenv import load_dotenv
 from langgraph.graph import StateGraph, START, END
 from customTypes import State
-from mainNodes import responder
+from evaluatorNodes import responder
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import tools_condition
-from mainTools import tools_node
+from evaluatorTools import tools_node
 
 load_dotenv()
 
