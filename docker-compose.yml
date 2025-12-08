@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    container_name: precifica_app
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - FLASK_APP=run.py
+      - FLASK_DEBUG=0
+      # Ensure DATABASE_URL is set in your .env file
+    restart: always
+    networks:
+      - precifica_network
+
+networks:
+  precifica_network:
+    driver: bridge
