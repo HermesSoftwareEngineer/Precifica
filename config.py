@@ -8,3 +8,4 @@ class Config:
         raise ValueError("No DATABASE_URL set for Flask application")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     DEBUG = True
+    FRONTEND_URL = os.environ.get('FRONTEND_URL') or 'http://localhost:5173'

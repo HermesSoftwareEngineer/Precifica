@@ -9,7 +9,7 @@ def create_app(config_class=Config):
     db.init_app(app)
     bcrypt.init_app(app)
     login_manager.init_app(app)
-    cors.init_app(app, resources={r"/*": {"origins": "http://localhost:5173"}}, supports_credentials=True)
+    cors.init_app(app, resources={r"/*": {"origins": app.config['FRONTEND_URL']}}, supports_credentials=True)
 
     from app.routes.main_routes import main_bp
     from app.routes.auth_routes import auth_bp
