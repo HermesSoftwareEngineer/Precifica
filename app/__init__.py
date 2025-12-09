@@ -1,3 +1,4 @@
+import os
 from flask import Flask
 from config import Config
 from app.extensions import db, bcrypt, login_manager, cors
@@ -9,7 +10,17 @@ def create_app(config_class=Config):
     db.init_app(app)
     bcrypt.init_app(app)
     login_manager.init_app(app)
-    cors.init_app(app, resources={r"/*": {"origins": app.config['FRONTEND_URL']}}, supports_credentials=True)
+
+    # Configurar CORS baseado em variável de ambiente FRONTEND_ORIGIN
+    frontend_origin = os.environ.get('FRONTEND_ORIGIN', '*')
+    cors.init_app(
+        app,
+        origins=[frontend_origin],
+        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+        supports_credentials=True
+    )
+    app.logger.info(f"CORS configurado com origin: {frontend_origin}")
 
     from app.routes.main_routes import main_bp
     from app.routes.auth_routes import auth_bp
