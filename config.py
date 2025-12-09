@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev_key_change_in_production'
@@ -8,4 +11,4 @@ class Config:
         raise ValueError("No DATABASE_URL set for Flask application")
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     DEBUG = True
-    FRONTEND_URL = os.environ.get('FRONTEND_URL') or 'http://localhost:5173'
+    FRONTEND_URL = os.environ.get('FRONTEND_URL')
