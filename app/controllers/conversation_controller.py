@@ -1,12 +1,16 @@
 from app.extensions import db
 from app.models.chat import Conversation, Message
-from flask_login import current_user
+from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 import logging
 
 logger = logging.getLogger(__name__)
 
 def create_conversation(title="New Conversation"):
-    user_id = current_user.id if current_user.is_authenticated else None
+    try:
+        verify_jwt_in_request()
+        user_id = int(get_jwt_identity())
+    except:
+        user_id = None
     logger.info(f"Creating conversation: title='{title}', user_id={user_id}")
     conversation = Conversation(user_id=user_id, title=title)
     db.session.add(conversation)
@@ -15,11 +19,14 @@ def create_conversation(title="New Conversation"):
     return conversation
 
 def get_user_conversations():
-    if not current_user.is_authenticated:
+    try:
+        verify_jwt_in_request()
+        user_id = int(get_jwt_identity())
+    except:
         logger.warning("Unauthenticated user attempted to fetch conversations")
         return []
-    logger.info(f"Fetching conversations for user: {current_user.id}")
-    return Conversation.query.filter_by(user_id=current_user.id).order_by(Conversation.updated_at.desc()).all()
+    logger.info(f"Fetching conversations for user: {user_id}")
+    return Conversation.query.filter_by(user_id=user_id).order_by(Conversation.updated_at.desc()).all()
 
 def get_conversation_by_id(conversation_id):
     logger.info(f"Fetching conversation: {conversation_id}")

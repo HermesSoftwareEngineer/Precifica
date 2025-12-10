@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from app.controllers.admin_controller import get_all_users, get_user_by_id, create_user_admin, update_user_admin, delete_user_admin
 from app.utils.decorators import admin_required
-from flask_login import login_required
+from flask_jwt_extended import jwt_required
 from app.models.user import User
 import logging
 
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 @admin_bp.route("/users", methods=['GET'])
-@login_required
+@jwt_required()
 @admin_required
 def users_list():
     logger.info("Admin accessing user list")
@@ -18,7 +18,7 @@ def users_list():
     return jsonify([user.to_dict() for user in users]), 200
 
 @admin_bp.route("/users", methods=['POST'])
-@login_required
+@jwt_required()
 @admin_required
 def new_user():
     logger.info("Admin creating new user")
@@ -40,7 +40,7 @@ def new_user():
     return jsonify({'message': 'User created successfully', 'user': user.to_dict()}), 201
 
 @admin_bp.route("/users/<int:user_id>", methods=['PUT'])
-@login_required
+@jwt_required()
 @admin_required
 def edit_user(user_id):
     logger.info(f"Admin editing user: {user_id}")
@@ -63,7 +63,7 @@ def edit_user(user_id):
     return jsonify({'message': 'User updated successfully', 'user': updated_user.to_dict()}), 200
 
 @admin_bp.route("/users/<int:user_id>", methods=['DELETE'])
-@login_required
+@jwt_required()
 @admin_required
 def delete_user(user_id):
     logger.info(f"Admin deleting user: {user_id}")

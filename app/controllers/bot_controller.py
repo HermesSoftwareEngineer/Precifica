@@ -16,7 +16,7 @@ from app.bot.prompts import prompt_ajuste_avaliacao
 from app.models.chat import Conversation, Message
 from app.models.evaluation import Evaluation
 from app.extensions import db
-from flask_login import current_user
+from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from datetime import datetime
 
 def chat():
@@ -38,7 +38,11 @@ def chat():
              return jsonify({'error': 'Conversation not found'}), 404
     else:
         # Create new conversation
-        user_id = current_user.id if current_user.is_authenticated else None
+        try:
+            verify_jwt_in_request()
+            user_id = int(get_jwt_identity())
+        except:
+            user_id = None
         logger.info(f"Creating new conversation for user: {user_id}")
         conversation = Conversation(user_id=user_id, title=user_input[:30] + "...")
         db.session.add(conversation)
@@ -116,7 +120,11 @@ def chat_evaluation(evaluation_id):
     
     if not conversation:
         # Create new conversation
-        user_id = current_user.id if current_user.is_authenticated else None
+        try:
+            verify_jwt_in_request()
+            user_id = int(get_jwt_identity())
+        except:
+            user_id = None
         conversation = Conversation(user_id=user_id, title=f"Ajuste Avaliação #{evaluation_id}")
         db.session.add(conversation)
         db.session.flush() # Get ID

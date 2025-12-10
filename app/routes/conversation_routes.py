@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_login import login_required, current_user
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.conversation_controller import (
     create_conversation, get_user_conversations, get_conversation_by_id,
     update_conversation_title, delete_conversation_by_id, get_conversation_messages
@@ -11,32 +11,37 @@ logger = logging.getLogger(__name__)
 conversation_bp = Blueprint('conversation', __name__, url_prefix='/api/conversations')
 
 @conversation_bp.route('/', methods=['GET'])
-@login_required
+@jwt_required()
 def list_conversations():
-    logger.info(f"User {current_user.id} listing conversations")
+    user_id = get_jwt_identity()
+    logger.info(f"User {user_id} listing conversations")
     conversations = get_user_conversations()
     return jsonify([c.to_dict() for c in conversations]), 200
 
 @conversation_bp.route('/', methods=['POST'])
-@login_required
+@jwt_required()
 def new_conversation():
-    logger.info(f"User {current_user.id} creating new conversation")
+    user_id = get_jwt_identity()
+    logger.info(f"User {user_id} creating new conversation")
     data = request.get_json() or {}
     title = data.get('title', 'New Conversation')
     conversation = create_conversation(title)
     return jsonify(conversation.to_dict()), 201
 
 @conversation_bp.route('/<int:conversation_id>', methods=['GET'])
-@login_required
+@jwt_required()
 def get_conversation(conversation_id):
-    logger.info(f"User {current_user.id} requesting conversation {conversation_id}")
+    user_id = int(get_jwt_identity())
+    logger.info(f"User {user_id} requesting conversation {conversation_id}")
     conversation = get_conversation_by_id(conversation_id)
     if not conversation:
         logger.warning(f"Conversation {conversation_id} not found")
         return jsonify({'error': 'Conversation not found'}), 404
     
-    if conversation.user_id != current_user.id and not current_user.is_admin:
-        logger.warning(f"User {current_user.id} unauthorized to access conversation {conversation_id}")
+    from app.models.user import User
+    user = User.query.get(user_id)
+    if conversation.user_id != user_id and not user.is_admin:
+        logger.warning(f"User {user_id} unauthorized to access conversation {conversation_id}")
         return jsonify({'error': 'Unauthorized'}), 403
 
     messages = get_conversation_messages(conversation_id)
@@ -46,16 +51,19 @@ def get_conversation(conversation_id):
     return jsonify(response), 200
 
 @conversation_bp.route('/<int:conversation_id>', methods=['PUT'])
-@login_required
+@jwt_required()
 def update_conversation(conversation_id):
-    logger.info(f"User {current_user.id} updating conversation {conversation_id}")
+    user_id = int(get_jwt_identity())
+    logger.info(f"User {user_id} updating conversation {conversation_id}")
     conversation = get_conversation_by_id(conversation_id)
     if not conversation:
         logger.warning(f"Conversation {conversation_id} not found")
         return jsonify({'error': 'Conversation not found'}), 404
-        
-    if conversation.user_id != current_user.id and not current_user.is_admin:
-        logger.warning(f"User {current_user.id} unauthorized to update conversation {conversation_id}")
+    
+    from app.models.user import User
+    user = User.query.get(user_id)
+    if conversation.user_id != user_id and not user.is_admin:
+        logger.warning(f"User {user_id} unauthorized to update conversation {conversation_id}")
         return jsonify({'error': 'Unauthorized'}), 403
 
     data = request.get_json()
@@ -68,16 +76,19 @@ def update_conversation(conversation_id):
     return jsonify(updated_conversation.to_dict()), 200
 
 @conversation_bp.route('/<int:conversation_id>', methods=['DELETE'])
-@login_required
+@jwt_required()
 def delete_conversation(conversation_id):
-    logger.info(f"User {current_user.id} deleting conversation {conversation_id}")
+    user_id = int(get_jwt_identity())
+    logger.info(f"User {user_id} deleting conversation {conversation_id}")
     conversation = get_conversation_by_id(conversation_id)
     if not conversation:
         logger.warning(f"Conversation {conversation_id} not found")
         return jsonify({'error': 'Conversation not found'}), 404
-        
-    if conversation.user_id != current_user.id and not current_user.is_admin:
-        logger.warning(f"User {current_user.id} unauthorized to delete conversation {conversation_id}")
+    
+    from app.models.user import User
+    user = User.query.get(user_id)
+    if conversation.user_id != user_id and not user.is_admin:
+        logger.warning(f"User {user_id} unauthorized to delete conversation {conversation_id}")
         return jsonify({'error': 'Unauthorized'}), 403
 
     if delete_conversation_by_id(conversation_id):
