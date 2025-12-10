@@ -1,6 +1,6 @@
 from app.models.user import User
 from app.extensions import db, bcrypt
-from flask_login import login_user, logout_user
+from flask_jwt_extended import create_access_token
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,16 +14,17 @@ def register_user(username, email, password):
     logger.info(f"User registered successfully: {user.id}")
     return user
 
-def login_user_by_email(email, password, remember=False):
+def login_user_by_email(email, password):
     logger.info(f"Attempting login for email: {email}")
     user = User.query.filter_by(email=email).first()
     if user and bcrypt.check_password_hash(user.password, password):
-        login_user(user, remember=remember)
+        access_token = create_access_token(identity=str(user.id))
         logger.info(f"Login successful for user: {user.id}")
-        return True
+        return access_token, user
     logger.warning(f"Login failed for email: {email}")
-    return False
+    return None, None
 
 def logout():
     logger.info("Logging out user")
-    logout_user()
+    # Client side should discard the token
+    pass

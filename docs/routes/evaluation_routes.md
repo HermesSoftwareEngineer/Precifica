@@ -5,11 +5,11 @@ Base URL: `/api/evaluations`
 ## Authentication
 
 All routes in this module require authentication.
-The API uses Session-based authentication. You must include the `session` cookie obtained from the `/auth/login` endpoint in your requests.
+The API uses **JWT (JSON Web Token)** authentication. You must include the JWT token obtained from the `/auth/login` endpoint in the `Authorization` header of your requests.
 
 *   **Auth Required:** Yes
-*   **Auth Type:** Session Cookie (standard Flask-Login session)
-*   **Token:** If you are looking for a Bearer token, please note that this API currently relies on the session cookie. Ensure your client (browser or HTTP client) handles cookies correctly.
+*   **Auth Type:** Bearer Token
+*   **Header:** `Authorization: Bearer <your_access_token>`
 
 ## 1. Create Evaluation
 - **URL:** `/`

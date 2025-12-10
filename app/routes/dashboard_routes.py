@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from flask_login import login_required
+from flask_jwt_extended import jwt_required
 from app.controllers.dashboard_controller import DashboardController
 import logging
 
@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 dashboard_bp = Blueprint('dashboard', __name__)
 
 @dashboard_bp.route('/api/dashboard/summary', methods=['GET'])
-@login_required
+@jwt_required()
 def get_summary():
     """
     Get summary statistics for the dashboard.
@@ -21,7 +21,7 @@ def get_summary():
     return jsonify(data), 200
 
 @dashboard_bp.route('/api/dashboard/charts', methods=['GET'])
-@login_required
+@jwt_required()
 def get_charts():
     """
     Get data for dashboard charts.
@@ -34,7 +34,7 @@ def get_charts():
     return jsonify(data), 200
 
 @dashboard_bp.route('/api/dashboard/trends', methods=['GET'])
-@login_required
+@jwt_required()
 def get_trends():
     """
     Get evaluation trends over time.
@@ -47,7 +47,7 @@ def get_trends():
     return jsonify(data), 200
 
 @dashboard_bp.route('/api/dashboard/distribution', methods=['GET'])
-@login_required
+@jwt_required()
 def get_distribution():
     """
     Get price distribution data.
@@ -60,7 +60,7 @@ def get_distribution():
     return jsonify(data), 200
 
 @dashboard_bp.route('/api/dashboard/geographic', methods=['GET'])
-@login_required
+@jwt_required()
 def get_geographic():
     """
     Get geographic statistics (top cities, neighborhoods).
@@ -73,7 +73,7 @@ def get_geographic():
     return jsonify(data), 200
 
 @dashboard_bp.route('/api/dashboard/features', methods=['GET'])
-@login_required
+@jwt_required()
 def get_features():
     """
     Get property features statistics (bedrooms, parking).

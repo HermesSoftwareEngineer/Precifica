@@ -1,6 +1,5 @@
 from flask import Blueprint, request, jsonify
 from app.controllers.auth_controller import register_user, login_user_by_email, logout
-from flask_login import current_user
 from app.models.user import User
 import logging
 
@@ -11,9 +10,6 @@ auth_bp = Blueprint('auth', __name__)
 @auth_bp.route("/register", methods=['POST'])
 def register():
     logger.info("Register route accessed")
-    if current_user.is_authenticated:
-        logger.info("User already logged in, cannot register")
-        return jsonify({'message': 'Already logged in'}), 400
     
     data = request.get_json()
     if not data or not data.get('username') or not data.get('email') or not data.get('password'):
@@ -34,19 +30,20 @@ def register():
 @auth_bp.route("/login", methods=['POST'])
 def login():
     logger.info("Login route accessed")
-    if current_user.is_authenticated:
-        logger.info("User already logged in")
-        return jsonify({'message': 'Already logged in'}), 200
         
     data = request.get_json()
     if not data or not data.get('email') or not data.get('password'):
         logger.warning("Missing email or password for login")
         return jsonify({'error': 'Missing email or password'}), 400
 
-    remember = data.get('remember', False)
-    if login_user_by_email(data['email'], data['password'], remember):
-        logger.info(f"User logged in via route: {current_user.id}")
-        return jsonify({'message': 'Login successful', 'user': current_user.to_dict()}), 200
+    access_token, user = login_user_by_email(data['email'], data['password'])
+    if access_token:
+        logger.info(f"User logged in via route: {user.id}")
+        return jsonify({
+            'message': 'Login successful', 
+            'user': user.to_dict(),
+            'access_token': access_token
+        }), 200
     else:
         logger.warning(f"Login failed for email: {data.get('email')}")
         return jsonify({'error': 'Login Unsuccessful. Please check email and password'}), 401

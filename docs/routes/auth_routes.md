@@ -2,10 +2,18 @@
 
 Base URL: `/` (No prefix defined in Blueprint, but routes are at root level)
 
+## Authentication Mechanism
+
+This API uses **JWT (JSON Web Token)** for authentication.
+1.  **Login:** Send credentials to `/login`. Receive an `access_token`.
+2.  **Store:** Save this token on the client side (e.g., `localStorage`, `sessionStorage`, or memory).
+3.  **Use:** Send the token in the `Authorization` header for all protected routes:
+    `Authorization: Bearer <your_access_token>`
+
 ## 1. Register
 - **URL:** `/register`
 - **Method:** `POST`
-- **Auth Required:** No (Must be logged out)
+- **Auth Required:** No
 - **Description:** Registers a new user.
 - **Body:**
   ```json
@@ -17,30 +25,41 @@ Base URL: `/` (No prefix defined in Blueprint, but routes are at root level)
   ```
 - **Response:**
   - `201 Created`: User created successfully.
-  - `400 Bad Request`: Missing fields, username/email taken, or already logged in.
+  - `400 Bad Request`: Missing fields, username/email taken.
 
 ## 2. Login
 - **URL:** `/login`
 - **Method:** `POST`
-- **Auth Required:** No (Must be logged out)
-- **Description:** Authenticates a user.
+- **Auth Required:** No
+- **Description:** Authenticates a user and returns a JWT access token.
 - **Body:**
   ```json
   {
     "email": "string",
-    "password": "string",
-    "remember": boolean (optional)
+    "password": "string"
   }
   ```
 - **Response:**
-  - `200 OK`: Login successful.
+  - `200 OK`: Login successful. Returns the token.
+    ```json
+    {
+      "message": "Login successful",
+      "user": {
+        "id": 1,
+        "username": "example",
+        "email": "example@test.com",
+        "is_admin": false
+      },
+      "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1Ni..."
+    }
+    ```
   - `400 Bad Request`: Missing email/password.
   - `401 Unauthorized`: Invalid credentials.
 
 ## 3. Logout
 - **URL:** `/logout`
 - **Method:** `POST`
-- **Auth Required:** Yes (Implicitly, to logout)
-- **Description:** Logs out the current user.
+- **Auth Required:** No
+- **Description:**  For JWT, "logging out" is primarily a client-side action (discarding the token). This endpoint returns a success message for consistency but does not invalidate the token server-side (unless a blocklist is implemented).
 - **Response:**
   - `200 OK`: Logged out successfully.
