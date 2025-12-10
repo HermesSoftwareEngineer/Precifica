@@ -38,7 +38,5 @@ COPY . .
 # Expose port 5000 for the Flask app
 EXPOSE 5000
 
-# Run the application with Gunicorn
-# bind to 0.0.0.0:5000
-# access log to stdout
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "run:app"]
+# Run the application with Gunicorn using configuration file
+CMD ["gunicorn", "--config", "gunicorn.conf.py", "run:app"]
