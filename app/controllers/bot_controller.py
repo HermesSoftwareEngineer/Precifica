@@ -1,6 +1,9 @@
 import sys
 import os
+import logging
 from flask import request, jsonify
+
+logger = logging.getLogger(__name__)
 
 # Adiciona o diretório app/bot ao sys.path para resolver as importações internas do bot
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -17,6 +20,7 @@ from flask_login import current_user
 from datetime import datetime
 
 def chat():
+    logger.info("Starting chat request processing")
     data = request.get_json()
     user_input = data.get('message')
     conversation_id = data.get('conversation_id')
@@ -27,30 +31,37 @@ def chat():
     
     conversation = None
     if conversation_id:
+        logger.info(f"Retrieving conversation: {conversation_id}")
         conversation = Conversation.query.get(conversation_id)
         if not conversation:
+             logger.warning(f"Conversation not found: {conversation_id}")
              return jsonify({'error': 'Conversation not found'}), 404
     else:
         # Create new conversation
         user_id = current_user.id if current_user.is_authenticated else None
+        logger.info(f"Creating new conversation for user: {user_id}")
         conversation = Conversation(user_id=user_id, title=user_input[:30] + "...")
         db.session.add(conversation)
         db.session.commit()
         conversation_id = conversation.id
+        logger.info(f"New conversation created: {conversation_id}")
 
     if not user_input:
+        logger.warning("Message is required but missing")
         return jsonify({'error': 'Message is required'}), 400
 
     # Save User Message
     user_msg = Message(conversation_id=conversation.id, sender='user', content=user_input)
     db.session.add(user_msg)
     db.session.commit()
+    logger.info(f"User message saved for conversation {conversation_id}")
 
     # Use conversation_id as thread_id for LangGraph memory
     config = {"configurable": {"thread_id": str(conversation.id)}}
 
     try:
         # O input para o graph deve ser compatível com o que está definido no State
+        logger.info(f"Invoking graph for conversation {conversation_id}")
         response = graph.invoke({"messages": user_input}, config)
         
         # Extrai a última mensagem que deve ser a resposta da IA
@@ -77,6 +88,7 @@ def chat():
         conversation.updated_at = datetime.utcnow()
         
         db.session.commit()
+        logger.info(f"Bot response saved for conversation {conversation_id}")
         
         return jsonify({
             'response': ai_message,
@@ -85,10 +97,12 @@ def chat():
         })
 
     except Exception as e:
+        logger.error(f"Error in bot chat: {e}", exc_info=True)
         print(f"Error in bot chat: {e}")
         return jsonify({'error': str(e)}), 500
 
 def chat_evaluation(evaluation_id):
+    logger.info(f"Starting chat evaluation for evaluation_id: {evaluation_id}")
     data = request.get_json()
     user_input = data.get('message')
     force_new_chat = data.get('new_chat', False)
@@ -97,6 +111,7 @@ def chat_evaluation(evaluation_id):
     
     conversation = None
     if evaluation.last_chat_id and not force_new_chat:
+        logger.info(f"Retrieving last chat for evaluation: {evaluation.last_chat_id}")
         conversation = Conversation.query.get(evaluation.last_chat_id)
     
     if not conversation:

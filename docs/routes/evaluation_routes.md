@@ -2,9 +2,19 @@
 
 Base URL: `/api/evaluations`
 
+## Authentication
+
+All routes in this module require authentication.
+The API uses Session-based authentication. You must include the `session` cookie obtained from the `/auth/login` endpoint in your requests.
+
+*   **Auth Required:** Yes
+*   **Auth Type:** Session Cookie (standard Flask-Login session)
+*   **Token:** If you are looking for a Bearer token, please note that this API currently relies on the session cookie. Ensure your client (browser or HTTP client) handles cookies correctly.
+
 ## 1. Create Evaluation
 - **URL:** `/`
 - **Method:** `POST`
+- **Auth Required:** Yes
 - **Description:** Creates a new property evaluation. Note: Fields like `region_value_sqm`, `estimated_price`, `rounded_price`, and `analyzed_properties_count` are automatically calculated based on associated base listings and should not be provided in the request body.
 - **Body:**
   ```json
@@ -31,12 +41,14 @@ Base URL: `/api/evaluations`
 ## 2. Get Evaluations
 - **URL:** `/`
 - **Method:** `GET`
+- **Auth Required:** Yes
 - **Description:** Retrieves a list of evaluations.
 - **Response:** JSON list of evaluations.
 
 ## 3. Get Evaluation
 - **URL:** `/<evaluation_id>`
 - **Method:** `GET`
+- **Auth Required:** Yes
 - **Description:** Retrieves a specific evaluation by ID, including its associated base listings.
 - **Response:** JSON object of the evaluation with `base_listings`.
   ```json
@@ -90,6 +102,7 @@ Base URL: `/api/evaluations`
 ## 4. Update Evaluation
 - **URL:** `/<evaluation_id>`
 - **Method:** `PUT`
+- **Auth Required:** Yes
 - **Description:** Updates an existing evaluation. If the `area` field is updated, the `region_value_sqm`, `estimated_price`, and `rounded_price` are automatically recalculated based on the associated base listings.
 - **Body:** Fields to update.
 - **Response:** JSON object of the updated evaluation.
@@ -97,6 +110,7 @@ Base URL: `/api/evaluations`
 ## 5. Delete Evaluation
 - **URL:** `/<evaluation_id>`
 - **Method:** `DELETE`
+- **Auth Required:** Yes
 - **Description:** Deletes an evaluation.
 - **Response:** Success message.
 

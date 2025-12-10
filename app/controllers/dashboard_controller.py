@@ -4,10 +4,14 @@ from app.models.user import User
 from app.models.chat import Conversation
 from sqlalchemy import func, desc
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DashboardController:
     @staticmethod
     def get_summary_stats():
+        logger.info("Fetching dashboard summary stats")
         try:
             total_evaluations = Evaluation.query.count()
             total_users = User.query.count()
@@ -22,10 +26,12 @@ class DashboardController:
                 "average_price_sqm": round(avg_price_sqm, 2)
             }
         except Exception as e:
+            logger.error(f"Error fetching summary stats: {e}", exc_info=True)
             return {"error": str(e)}
 
     @staticmethod
     def get_charts_data():
+        logger.info("Fetching dashboard charts data")
         try:
             # Evaluations by City
             city_stats = db.session.query(
@@ -54,10 +60,12 @@ class DashboardController:
                 "evaluations_by_purpose": evaluations_by_purpose
             }
         except Exception as e:
+            logger.error(f"Error fetching charts data: {e}", exc_info=True)
             return {"error": str(e)}
 
     @staticmethod
     def get_evaluation_trends():
+        logger.info("Fetching evaluation trends")
         try:
             # Group by date
             trends_query = db.session.query(
@@ -75,10 +83,12 @@ class DashboardController:
             ]
             return {"trends": trends}
         except Exception as e:
+            logger.error(f"Error fetching evaluation trends: {e}", exc_info=True)
             return {"error": str(e)}
 
     @staticmethod
     def get_price_distribution():
+        logger.info("Fetching price distribution")
         try:
             sqm_values = db.session.query(Evaluation.region_value_sqm).filter(Evaluation.region_value_sqm > 0).all()
             values = [v[0] for v in sqm_values]
@@ -98,6 +108,7 @@ class DashboardController:
 
             return {"distribution": buckets}
         except Exception as e:
+            logger.error(f"Error fetching price distribution: {e}", exc_info=True)
             return {"error": str(e)}
 
     @staticmethod

@@ -2,6 +2,15 @@
 
 This document describes the API routes for the Dashboard.
 
+## Authentication
+
+All routes in this module require authentication.
+The API uses Session-based authentication. You must include the `session` cookie obtained from the `/auth/login` endpoint in your requests.
+
+*   **Auth Required:** Yes
+*   **Auth Type:** Session Cookie (standard Flask-Login session)
+*   **Token:** If you are looking for a Bearer token, please note that this API currently relies on the session cookie. Ensure your client (browser or HTTP client) handles cookies correctly.
+
 ## Get Summary Statistics
 
 Retrieves high-level summary statistics for the dashboard.

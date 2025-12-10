@@ -2,10 +2,14 @@ from flask import jsonify, request
 from app.models.evaluation import Evaluation, BaseListing
 from app.extensions import db
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 # --- Evaluation CRUD ---
 
 def create_evaluation():
+    logger.info("Creating new evaluation")
     data = request.get_json()
     try:
         new_evaluation = Evaluation(
@@ -31,20 +35,25 @@ def create_evaluation():
         )
         db.session.add(new_evaluation)
         db.session.commit()
+        logger.info(f"Evaluation created successfully: {new_evaluation.id}")
         return jsonify(new_evaluation.to_dict()), 201
     except Exception as e:
+        logger.error(f"Error creating evaluation: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
 
 def get_evaluations():
+    logger.info("Fetching all evaluations")
     evaluations = Evaluation.query.all()
     return jsonify([e.to_dict() for e in evaluations]), 200
 
 def get_evaluation(evaluation_id):
+    logger.info(f"Fetching evaluation: {evaluation_id}")
     evaluation = Evaluation.query.get_or_404(evaluation_id)
     return jsonify(evaluation.to_dict(include_listings=True)), 200
 
 def update_evaluation(evaluation_id):
+    logger.info(f"Updating evaluation: {evaluation_id}")
     evaluation = Evaluation.query.get_or_404(evaluation_id)
     data = request.get_json()
     
@@ -73,24 +82,30 @@ def update_evaluation(evaluation_id):
             evaluation.recalculate_metrics()
 
         db.session.commit()
+        logger.info(f"Evaluation {evaluation_id} updated successfully")
         return jsonify(evaluation.to_dict()), 200
     except Exception as e:
+        logger.error(f"Error updating evaluation {evaluation_id}: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
 
 def delete_evaluation(evaluation_id):
+    logger.info(f"Deleting evaluation: {evaluation_id}")
     evaluation = Evaluation.query.get_or_404(evaluation_id)
     try:
         db.session.delete(evaluation)
         db.session.commit()
+        logger.info(f"Evaluation {evaluation_id} deleted successfully")
         return jsonify({'message': 'Evaluation deleted successfully'}), 200
     except Exception as e:
+        logger.error(f"Error deleting evaluation {evaluation_id}: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
 
 # --- BaseListing CRUD ---
 
 def create_base_listing(evaluation_id):
+    logger.info(f"Creating base listing for evaluation: {evaluation_id}")
     # Ensure evaluation exists
     Evaluation.query.get_or_404(evaluation_id)
     data = request.get_json()
