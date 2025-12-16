@@ -3,7 +3,7 @@ import multiprocessing
 import os
 
 # Server Socket
-bind = "0.0.0.0:5000"
+bind = "0.0.0.0:{}".format(os.environ.get("PORT", "5000"))
 backlog = 2048
 
 # Worker Processes

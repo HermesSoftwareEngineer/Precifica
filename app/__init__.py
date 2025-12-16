@@ -14,15 +14,15 @@ def create_app(config_class=Config):
     jwt.init_app(app)
 
     # Configurar CORS baseado em variável de ambiente FRONTEND_ORIGIN
-    frontend_origin = os.environ.get('FRONTEND_ORIGIN', '*')
-    CORS(
-        app,
-        origins=[frontend_origin],
-        methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
-        supports_credentials=True
-    )
-    app.logger.info(f"CORS configurado com origin: {frontend_origin}")
+    # frontend_origin = os.environ.get('FRONTEND_ORIGIN', '*')
+    # CORS(
+    #     app,
+    #     origins=[frontend_origin],
+    #     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    #     allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+    #     supports_credentials=True
+    # )
+    # app.logger.info(f"CORS configurado com origin: {frontend_origin}")
 
     from app.routes.main_routes import main_bp
     from app.routes.auth_routes import auth_bp
