@@ -1,8 +1,9 @@
-from langchain_google_vertexai import ChatVertexAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
+import os
 
 load_dotenv()
 
-llm_main = ChatVertexAI(
-    model_name="gemini-2.5-flash",
+llm_main = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash"
 )
