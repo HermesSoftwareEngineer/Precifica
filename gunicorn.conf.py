@@ -29,7 +29,10 @@ loglevel = "info"
 proc_name = "precifica_app"
 
 # Preload app for better performance
-preload_app = True
+# WARNING: preload_app=True is incompatible with gevent workers unless monkey patching is done
+# before the app is loaded. This causes SSL/Socket errors (TypeError: super(type, obj)...).
+# We disable it to ensure each worker loads the app in a fully patched environment.
+preload_app = False
 
 # Server Mechanics
 daemon = False
