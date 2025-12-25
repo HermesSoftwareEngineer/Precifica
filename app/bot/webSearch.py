@@ -6,11 +6,11 @@ from dotenv import load_dotenv
 
 def web_search(query, num_results=10, cx=None):
     load_dotenv()
-    api_key = os.getenv("GOOGLE_API_KEY")
+    api_key = os.getenv("GOOGLE_API_WEB_SEARCH_KEY")
     if not cx:
         raise ValueError("É necessário fornecer o parâmetro 'cx' (ID do mecanismo de busca personalizado do Google)")
     if not api_key:
-        raise ValueError("Chave de API do Google não encontrada no .env (GOOGLE_API_KEY)")
+        raise ValueError("Chave de API do Google não encontrada no .env (GOOGLE_API_WEB_SEARCH_KEY)")
     search_url = "https://www.googleapis.com/customsearch/v1"
     params = {
         "key": api_key,
