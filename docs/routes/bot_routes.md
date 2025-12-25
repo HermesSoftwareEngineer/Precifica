@@ -31,7 +31,7 @@ Base URL: `/bot`
 - **URL:** `/evaluation/<evaluation_id>/chat`
 - **Method:** `POST`
 - **Auth Required:** Optional (User ID linked if logged in)
-- **Description:** Sends a message to the AI bot specifically to discuss or adjust an existing evaluation. If a chat session already exists for this evaluation, it continues it. Otherwise, it starts a new one with a specialized system prompt. To force a new conversation, send `"new_chat": true`.
+- **Description:** Sends a message to the AI bot specifically to discuss or adjust an existing evaluation. If a chat session already exists for this evaluation, it continues it. Otherwise, it starts a new one with a specialized system prompt. To force a new conversation, send `"new_chat": true`. **Note:** Conversations created here are linked to the evaluation and will not appear in the standard conversation list.
 - **Body:**
   ```json
   {
