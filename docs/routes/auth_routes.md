@@ -56,7 +56,24 @@ This API uses **JWT (JSON Web Token)** for authentication.
   - `400 Bad Request`: Missing email/password.
   - `401 Unauthorized`: Invalid credentials.
 
-## 3. Logout
+## 3. Change Password
+- **URL:** `/change-password`
+- **Method:** `POST`
+- **Auth Required:** Yes
+- **Description:** Allows the logged-in user to change their password.
+- **Body:**
+  ```json
+  {
+    "current_password": "string",
+    "new_password": "string"
+  }
+  ```
+- **Response:**
+  - `200 OK`: Password changed successfully.
+  - `400 Bad Request`: Missing fields or invalid current password.
+  - `401 Unauthorized`: Missing or invalid JWT token.
+
+## 4. Logout
 - **URL:** `/logout`
 - **Method:** `POST`
 - **Auth Required:** No

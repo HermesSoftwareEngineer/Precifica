@@ -50,6 +50,7 @@ def edit_user(user_id):
     username = data.get('username', user.username)
     email = data.get('email', user.email)
     is_admin = data.get('is_admin', user.is_admin)
+    password = data.get('password')
 
     if username != user.username and User.query.filter_by(username=username).first():
         logger.warning(f"Username already taken: {username}")
@@ -58,7 +59,7 @@ def edit_user(user_id):
         logger.warning(f"Email already taken: {email}")
         return jsonify({'error': 'Email already taken'}), 400
 
-    updated_user = update_user_admin(user, username, email, is_admin)
+    updated_user = update_user_admin(user, username, email, is_admin, password)
     logger.info(f"User {user_id} updated by admin")
     return jsonify({'message': 'User updated successfully', 'user': updated_user.to_dict()}), 200
 
