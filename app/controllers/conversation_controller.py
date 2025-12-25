@@ -26,7 +26,7 @@ def get_user_conversations():
         logger.warning("Unauthenticated user attempted to fetch conversations")
         return []
     logger.info(f"Fetching conversations for user: {user_id}")
-    return Conversation.query.filter_by(user_id=user_id).order_by(Conversation.updated_at.desc()).all()
+    return Conversation.query.filter_by(user_id=user_id).filter(Conversation.evaluation_id.is_(None)).order_by(Conversation.updated_at.desc()).all()
 
 def get_conversation_by_id(conversation_id):
     logger.info(f"Fetching conversation: {conversation_id}")

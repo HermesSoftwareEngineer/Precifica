@@ -6,7 +6,7 @@ Base URL: `/api/conversations`
 - **URL:** `/`
 - **Method:** `GET`
 - **Auth Required:** Yes
-- **Description:** Retrieves a list of all conversations belonging to the authenticated user, ordered by most recently updated.
+- **Description:** Retrieves a list of all conversations belonging to the authenticated user, ordered by most recently updated. **Note:** Conversations created specifically for evaluation adjustments (linked to an evaluation) are excluded from this list.
 - **Response:**
   - `200 OK`: List of conversation objects.
     ```json
@@ -14,6 +14,7 @@ Base URL: `/api/conversations`
       {
         "id": 1,
         "user_id": 1,
+        "evaluation_id": null,
         "title": "New Conversation",
         "created_at": "2023-10-27T10:00:00",
         "updated_at": "2023-10-27T10:05:00"
@@ -47,6 +48,7 @@ Base URL: `/api/conversations`
     {
       "id": 1,
       "user_id": 1,
+      "evaluation_id": null,
       "title": "Real Estate Analysis",
       "created_at": "...",
       "updated_at": "...",
