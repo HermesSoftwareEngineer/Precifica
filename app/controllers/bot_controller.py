@@ -11,13 +11,28 @@ bot_dir = os.path.join(os.path.dirname(current_dir), 'bot')
 if bot_dir not in sys.path:
     sys.path.append(bot_dir)
 
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 from app.bot.mainGraph import graph
 from app.bot.prompts import prompt_ajuste_avaliacao
+from app.bot.llms import llm_main
 from app.models.chat import Conversation, Message
 from app.models.evaluation import Evaluation
 from app.extensions import db
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from datetime import datetime
+
+def generate_conversation_title(user_message):
+    try:
+        prompt = ChatPromptTemplate.from_template(
+            "Gere um título curto (máximo 5 palavras) e conciso para uma conversa que começa com a seguinte mensagem: {message}. Responda apenas com o título."
+        )
+        chain = prompt | llm_main | StrOutputParser()
+        title = chain.invoke({"message": user_message})
+        return title.strip()
+    except Exception as e:
+        logger.error(f"Error generating title: {e}")
+        return "Nova Conversa"
 
 def chat():
     logger.info("Starting chat request processing")
@@ -36,6 +51,11 @@ def chat():
         if not conversation:
              logger.warning(f"Conversation not found: {conversation_id}")
              return jsonify({'error': 'Conversation not found'}), 404
+        
+        # Update title if it's the first message and title is default
+        if conversation.title == "New Conversation" and not conversation.messages:
+             conversation.title = generate_conversation_title(user_input)
+             db.session.commit()
     else:
         # Create new conversation
         try:
@@ -44,7 +64,8 @@ def chat():
         except:
             user_id = None
         logger.info(f"Creating new conversation for user: {user_id}")
-        conversation = Conversation(user_id=user_id, title=user_input[:30] + "...")
+        title = generate_conversation_title(user_input)
+        conversation = Conversation(user_id=user_id, title=title)
         db.session.add(conversation)
         db.session.commit()
         conversation_id = conversation.id
