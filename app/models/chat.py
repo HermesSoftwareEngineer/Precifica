@@ -5,6 +5,7 @@ class Conversation(db.Model):
     __tablename__ = 'conversations'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    evaluation_id = db.Column(db.Integer, db.ForeignKey('evaluations.id'), nullable=True)
     title = db.Column(db.String(100), nullable=False, default="New Conversation")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -15,6 +16,7 @@ class Conversation(db.Model):
         return {
             'id': self.id,
             'user_id': self.user_id,
+            'evaluation_id': self.evaluation_id,
             'title': self.title,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()

@@ -130,7 +130,7 @@ def chat_evaluation(evaluation_id):
         except:
             user_id = None
             
-        conversation = Conversation(user_id=user_id, title=f"Ajuste Avaliação #{evaluation_id}")
+        conversation = Conversation(user_id=user_id, title=f"Ajuste Avaliação #{evaluation_id}", evaluation_id=evaluation_id)
         db.session.add(conversation)
         db.session.flush()
         
