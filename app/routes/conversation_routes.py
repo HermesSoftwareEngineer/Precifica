@@ -24,7 +24,16 @@ def new_conversation():
     user_id = get_jwt_identity()
     logger.info(f"User {user_id} creating new conversation")
     data = request.get_json() or {}
-    title = data.get('title', 'New Conversation')
+    
+    title = data.get('title')
+    if not title:
+        message = data.get('message')
+        if message:
+            from app.controllers.bot_controller import generate_conversation_title
+            title = generate_conversation_title(message)
+        else:
+            title = 'New Conversation'
+
     conversation = create_conversation(title)
     return jsonify(conversation.to_dict()), 201
 
