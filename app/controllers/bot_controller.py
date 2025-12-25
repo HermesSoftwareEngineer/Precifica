@@ -111,90 +111,75 @@ def chat_evaluation(evaluation_id):
     user_input = data.get('message')
     force_new_chat = data.get('new_chat', False)
     
+    if not user_input:
+        return jsonify({'error': 'Message is required'}), 400
+
     evaluation = Evaluation.query.get_or_404(evaluation_id)
     
+    # 1. Recuperar ou criar conversa
     conversation = None
     if evaluation.last_chat_id and not force_new_chat:
-        logger.info(f"Retrieving last chat for evaluation: {evaluation.last_chat_id}")
         conversation = Conversation.query.get(evaluation.last_chat_id)
     
+    is_new_conversation = False
     if not conversation:
-        # Create new conversation
+        is_new_conversation = True
         try:
             verify_jwt_in_request()
             user_id = int(get_jwt_identity())
         except:
             user_id = None
+            
         conversation = Conversation(user_id=user_id, title=f"Ajuste Avaliação #{evaluation_id}")
         db.session.add(conversation)
-        db.session.flush() # Get ID
+        db.session.flush()
         
-        # Update evaluation with new chat ID
         evaluation.last_chat_id = conversation.id
-        
-        # Add System Prompt
-        system_content = prompt_ajuste_avaliacao.format(evaluation_id=evaluation_id)
-        system_msg = Message(conversation_id=conversation.id, sender='system', content=system_content)
-        db.session.add(system_msg)
-        
         db.session.commit()
+        logger.info(f"New conversation created: {conversation.id}")
 
-    if not user_input:
-        return jsonify({'error': 'Message is required'}), 400
+    # 2. Preparar mensagem (Concatenar prompt se for nova conversa)
+    if is_new_conversation:
+        system_prompt = prompt_ajuste_avaliacao.format(evaluation_id=evaluation_id)
+        full_input = f"{system_prompt}\n\nUser Input: {user_input}"
+        logger.info("Injecting system prompt into first user message")
+    else:
+        full_input = user_input
 
-    # Save User Message
+    # 3. Salvar mensagem do usuário no banco (apenas o input original para não poluir)
     user_msg = Message(conversation_id=conversation.id, sender='user', content=user_input)
     db.session.add(user_msg)
     db.session.commit()
 
-    # Use conversation_id as thread_id for LangGraph memory
+    # 4. Invocar o Graph
     config = {"configurable": {"thread_id": str(conversation.id)}}
 
     try:
-        # Invoke graph
-        # We need to pass the history or let the memory handle it.
-        # Since we are using MemorySaver with thread_id, we just need to pass the new message.
-        # However, for the FIRST message in a new conversation, we might want to ensure the system prompt is included in the context.
-        # If we just added it to the DB, the graph memory might not know about it yet if it only reads from its own checkpoint.
-        # But wait, the graph uses `MemorySaver` which stores state in memory (RAM) usually, unless configured to use DB.
-        # Here `memory = MemorySaver()` in `mainGraph.py`.
-        # So the graph state is separate from the DB `Message` table.
-        # We need to sync them or just pass the messages to the graph.
+        logger.info(f"Invoking graph for conversation {conversation.id}")
         
-        # If it's a new conversation (or we are restarting the server), the memory might be empty.
-        # We should probably pass the system message if it's the first turn.
+        # Envia full_input (com prompt se necessário) como mensagem de usuário
+        response = graph.invoke({"messages": [("user", full_input)]}, config)
         
-        messages_to_send = []
-        if len(conversation.messages) <= 2: # System + User (just added)
-             # Fetch system message
-             sys_msg = Message.query.filter_by(conversation_id=conversation.id, sender='system').first()
-             if sys_msg:
-                 messages_to_send.append(("system", sys_msg.content))
+        # Extrair resposta
+        last_message = response["messages"][-1]
+        ai_message_content = last_message.content
         
-        messages_to_send.append(("user", user_input))
-        
-        result = graph.invoke({"messages": messages_to_send}, config)
-        
-        # Extract response
-        last_message = result["messages"][-1]
-        ai_message = last_message.content
-        
-        # Ensure ai_message is a string
-        if isinstance(ai_message, list):
-            # If it's a list (e.g. from Gemini with thought process), extract the text part
+        # Garantir que é string
+        if isinstance(ai_message_content, list):
             text_parts = []
-            for part in ai_message:
+            for part in ai_message_content:
                 if isinstance(part, dict) and part.get('type') == 'text':
                     text_parts.append(part.get('text', ''))
                 elif isinstance(part, str):
                     text_parts.append(part)
             ai_message = "\n".join(text_parts)
-        elif not isinstance(ai_message, str):
-             ai_message = str(ai_message)
+        else:
+            ai_message = str(ai_message_content)
 
-        # Save Bot Message
+        # 5. Salvar resposta do Bot
         bot_msg = Message(conversation_id=conversation.id, sender='bot', content=ai_message)
         db.session.add(bot_msg)
+        conversation.updated_at = datetime.utcnow()
         db.session.commit()
         
         return jsonify({
@@ -204,6 +189,5 @@ def chat_evaluation(evaluation_id):
         })
 
     except Exception as e:
-        print(f"Error in bot chat evaluation: {e}")
+        logger.error(f"Error in bot chat evaluation: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
-        return jsonify({'error': 'Internal Server Error', 'details': str(e)}), 500
