@@ -8,9 +8,10 @@ logger = logging.getLogger(__name__)
 
 # --- Evaluation CRUD ---
 
-def create_evaluation():
+def create_evaluation(data=None):
     logger.info("Creating new evaluation")
-    data = request.get_json()
+    if data is None:
+        data = request.get_json()
     try:
         new_evaluation = Evaluation(
             address=data.get('address'),
@@ -52,10 +53,11 @@ def get_evaluation(evaluation_id):
     evaluation = Evaluation.query.get_or_404(evaluation_id)
     return jsonify(evaluation.to_dict(include_listings=True)), 200
 
-def update_evaluation(evaluation_id):
+def update_evaluation(evaluation_id, data=None):
     logger.info(f"Updating evaluation: {evaluation_id}")
     evaluation = Evaluation.query.get_or_404(evaluation_id)
-    data = request.get_json()
+    if data is None:
+        data = request.get_json()
     
     try:
         evaluation.address = data.get('address', evaluation.address)
@@ -104,11 +106,12 @@ def delete_evaluation(evaluation_id):
 
 # --- BaseListing CRUD ---
 
-def create_base_listing(evaluation_id):
+def create_base_listing(evaluation_id, data=None):
     logger.info(f"Creating base listing for evaluation: {evaluation_id}")
     # Ensure evaluation exists
     Evaluation.query.get_or_404(evaluation_id)
-    data = request.get_json()
+    if data is None:
+        data = request.get_json()
     
     try:
         collected_at_str = data.get('collected_at')
@@ -154,10 +157,10 @@ def get_base_listings(evaluation_id):
 def get_base_listing(listing_id):
     listing = BaseListing.query.get_or_404(listing_id)
     return jsonify(listing.to_dict()), 200
-
-def update_base_listing(listing_id):
+def update_base_listing(listing_id, data=None):
     listing = BaseListing.query.get_or_404(listing_id)
-    data = request.get_json()
+    if data is None:
+        data = request.get_json()
     
     try:
         listing.sample_number = data.get('sample_number', listing.sample_number)

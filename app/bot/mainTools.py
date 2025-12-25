@@ -1,9 +1,11 @@
 from langchain_core.tools import tool
 from langgraph.prebuilt import ToolNode
 from app.bot.graphEvaluator import graph as evaluator_graph
-from app.models.evaluation import Evaluation, BaseListing
-from app.extensions import db
 from app.bot.evaluatorTools import ler_conteudo_site, pesquisar_sites
+from app.controllers.evaluation_controller import (
+    create_evaluation, get_evaluation, get_evaluations, update_evaluation, delete_evaluation,
+    create_base_listing, get_base_listing, update_base_listing, delete_base_listing
+)
 import json
 from datetime import datetime
 from typing import List, Dict, Any
@@ -177,30 +179,34 @@ def salvar_avaliacao_db(
     """
     try:
         # Create Evaluation
-        nova_avaliacao = Evaluation(
-            address=endereco,
-            neighborhood=bairro,
-            city=cidade,
-            state=estado,
-            area=area,
-            bedrooms=quartos,
-            bathrooms=banheiros,
-            parking_spaces=vagas,
-            description=description,
-            classification=classification,
-            purpose=purpose,
-            property_type=property_type,
-            region_value_sqm=valor_regiao_m2,
-            analysis_type=tipo_analise,
-            owner_name=nome_proprietario,
-            appraiser_name=nome_avaliador,
-            estimated_price=preco_estimado,
-            rounded_price=preco_arredondado,
-            analyzed_properties_count=len(imoveis_considerados)
-        )
+        evaluation_data = {
+            "address": endereco,
+            "neighborhood": bairro,
+            "city": cidade,
+            "state": estado,
+            "area": area,
+            "bedrooms": quartos,
+            "bathrooms": banheiros,
+            "parking_spaces": vagas,
+            "description": description,
+            "classification": classification,
+            "purpose": purpose,
+            "property_type": property_type,
+            "region_value_sqm": valor_regiao_m2,
+            "analysis_type": tipo_analise,
+            "owner_name": nome_proprietario,
+            "appraiser_name": nome_avaliador,
+            "estimated_price": preco_estimado,
+            "rounded_price": preco_arredondado,
+            "analyzed_properties_count": len(imoveis_considerados)
+        }
         
-        db.session.add(nova_avaliacao)
-        db.session.flush() # Get ID
+        response, status_code = create_evaluation(evaluation_data)
+        if status_code != 201:
+             return f"Erro ao salvar avaliação: {response.get_json().get('error')}"
+        
+        nova_avaliacao = response.get_json()
+        evaluation_id = nova_avaliacao['id']
 
         # Create BaseListings
         for idx, imovel in enumerate(imoveis_considerados, start=1):
@@ -210,33 +216,31 @@ def salvar_avaliacao_db(
                     return obj.get(attr)
                 return getattr(obj, attr, None)
 
-            novo_imovel = BaseListing(
-                evaluation_id=nova_avaliacao.id,
-                sample_number=get_attr(imovel, 'numero_amostra') or idx,
-                address=get_attr(imovel, 'endereco'),
-                neighborhood=get_attr(imovel, 'bairro'),
-                city=get_attr(imovel, 'cidade'),
-                state=get_attr(imovel, 'estado'),
-                link=get_attr(imovel, 'link'),
-                area=get_attr(imovel, 'area'),
-                bedrooms=get_attr(imovel, 'quartos') or 0,
-                bathrooms=get_attr(imovel, 'banheiros') or 0,
-                parking_spaces=get_attr(imovel, 'vagas') or 0,
-                rent_value=get_attr(imovel, 'valor_aluguel'),
-                condo_fee=get_attr(imovel, 'valor_condominio'),
-                type=get_attr(imovel, 'tipo'),
-                purpose=get_attr(imovel, 'finalidade'),
-                collected_at=datetime.utcnow()
-            )
-            db.session.add(novo_imovel)
+            listing_data = {
+                "sample_number": get_attr(imovel, 'numero_amostra') or idx,
+                "address": get_attr(imovel, 'endereco'),
+                "neighborhood": get_attr(imovel, 'bairro'),
+                "city": get_attr(imovel, 'cidade'),
+                "state": get_attr(imovel, 'estado'),
+                "link": get_attr(imovel, 'link'),
+                "area": get_attr(imovel, 'area'),
+                "bedrooms": get_attr(imovel, 'quartos') or 0,
+                "bathrooms": get_attr(imovel, 'banheiros') or 0,
+                "parking_spaces": get_attr(imovel, 'vagas') or 0,
+                "rent_value": get_attr(imovel, 'valor_aluguel'),
+                "condo_fee": get_attr(imovel, 'valor_condominio'),
+                "type": get_attr(imovel, 'tipo'),
+                "purpose": get_attr(imovel, 'finalidade'),
+                "collected_at": datetime.utcnow().isoformat()
+            }
+            
+            resp_listing, status_listing = create_base_listing(evaluation_id, listing_data)
+            if status_listing != 201:
+                return f"Erro ao salvar imóvel comparativo: {resp_listing.get_json().get('error')}"
 
-        db.session.flush()
-        nova_avaliacao.recalculate_metrics()
-        db.session.commit()
-        return f"Avaliação salva com sucesso! ID: {nova_avaliacao.id}"
+        return f"Avaliação salva com sucesso! ID: {evaluation_id}"
 
     except Exception as e:
-        db.session.rollback()
         return f"Erro ao salvar avaliação: {str(e)}"
 
 @tool
@@ -246,11 +250,11 @@ def ler_avaliacao(id: int):
     Retorna os dados da avaliação e dos imóveis comparativos usados.
     """
     try:
-        evaluation = Evaluation.query.get(id)
-        if not evaluation:
-            return f"Avaliação com ID {id} não encontrada."
+        response, status = get_evaluation(id)
+        if status != 200:
+             return f"Avaliação com ID {id} não encontrada."
         
-        return json.dumps(evaluation.to_dict(include_listings=True), indent=2, ensure_ascii=False)
+        return json.dumps(response.get_json(), indent=2, ensure_ascii=False)
     except Exception as e:
         return f"Erro ao ler avaliação: {str(e)}"
 
@@ -261,13 +265,17 @@ def listar_avaliacoes():
     Retorna ID, Endereço, Bairro e Preço Estimado.
     """
     try:
-        evaluations = Evaluation.query.all()
+        response, status = get_evaluations()
+        if status != 200:
+            return "Erro ao listar avaliações."
+        
+        evaluations = response.get_json()
         if not evaluations:
             return "Nenhuma avaliação encontrada."
         
         result = []
         for ev in evaluations:
-            result.append(f"ID: {ev.id} | Endereço: {ev.address} | Bairro: {ev.neighborhood} | Preço: {ev.estimated_price}")
+            result.append(f"ID: {ev['id']} | Endereço: {ev['address']} | Bairro: {ev['neighborhood']} | Preço: {ev['estimated_price']}")
         
         return "\n".join(result)
     except Exception as e:
@@ -280,42 +288,22 @@ def alterar_avaliacao(id: int, campo: str, novo_valor: str):
     Campos permitidos: owner_name, appraiser_name, estimated_price, rounded_price, description, classification, purpose, property_type, bedrooms, bathrooms, parking_spaces, area.
     """
     try:
-        evaluation = Evaluation.query.get(id)
-        if not evaluation:
-            return f"Avaliação com ID {id} não encontrada."
-        
-        if campo == 'owner_name':
-            evaluation.owner_name = novo_valor
-        elif campo == 'appraiser_name':
-            evaluation.appraiser_name = novo_valor
-        elif campo == 'estimated_price':
-            evaluation.estimated_price = float(novo_valor)
-        elif campo == 'rounded_price':
-            evaluation.rounded_price = float(novo_valor)
-        elif campo == 'description':
-            evaluation.description = novo_valor
-        elif campo == 'classification':
-            evaluation.classification = novo_valor
-        elif campo == 'purpose':
-            evaluation.purpose = novo_valor
-        elif campo == 'property_type':
-            evaluation.property_type = novo_valor
-        elif campo == 'bedrooms':
-            evaluation.bedrooms = int(novo_valor)
-        elif campo == 'bathrooms':
-            evaluation.bathrooms = int(novo_valor)
-        elif campo == 'parking_spaces':
-            evaluation.parking_spaces = int(novo_valor)
-        elif campo == 'area':
-            evaluation.area = float(novo_valor)
-            evaluation.recalculate_metrics()
+        data = {}
+        if campo in ['estimated_price', 'rounded_price', 'area']:
+            data[campo] = float(novo_valor)
+        elif campo in ['bedrooms', 'bathrooms', 'parking_spaces']:
+            data[campo] = int(novo_valor)
+        elif campo in ['owner_name', 'appraiser_name', 'description', 'classification', 'purpose', 'property_type']:
+            data[campo] = novo_valor
         else:
             return "Campo inválido. Use: owner_name, appraiser_name, estimated_price, rounded_price, description, classification, purpose, property_type, bedrooms, bathrooms, parking_spaces, area."
             
-        db.session.commit()
+        response, status = update_evaluation(id, data)
+        if status != 200:
+            return f"Erro ao atualizar avaliação: {response.get_json().get('error')}"
+            
         return f"Avaliação {id} atualizada com sucesso."
     except Exception as e:
-        db.session.rollback()
         return f"Erro ao atualizar avaliação: {str(e)}"
 
 @tool
@@ -324,15 +312,12 @@ def deletar_avaliacao(id: int):
     Remove uma avaliação do banco de dados pelo ID.
     """
     try:
-        evaluation = Evaluation.query.get(id)
-        if not evaluation:
-            return f"Avaliação com ID {id} não encontrada."
+        response, status = delete_evaluation(id)
+        if status != 200:
+             return f"Erro ao deletar avaliação: {response.get_json().get('error')}"
         
-        db.session.delete(evaluation)
-        db.session.commit()
         return f"Avaliação {id} deletada com sucesso."
     except Exception as e:
-        db.session.rollback()
         return f"Erro ao deletar avaliação: {str(e)}"
 
 @tool
@@ -341,11 +326,11 @@ def ler_imovel_base(id: int):
     Busca os detalhes de um imóvel base (comparativo) pelo seu ID.
     """
     try:
-        listing = BaseListing.query.get(id)
-        if not listing:
+        response, status = get_base_listing(id)
+        if status != 200:
             return f"Imóvel base com ID {id} não encontrado."
         
-        return json.dumps(listing.to_dict(), indent=2, ensure_ascii=False)
+        return json.dumps(response.get_json(), indent=2, ensure_ascii=False)
     except Exception as e:
         return f"Erro ao ler imóvel base: {str(e)}"
 
@@ -356,29 +341,24 @@ def alterar_imovel_base(id: int, campo: str, novo_valor: str):
     Campos permitidos: sample_number, address, neighborhood, city, state, link, area, bedrooms, bathrooms, parking_spaces, rent_value, condo_fee, type, purpose.
     """
     try:
-        listing = BaseListing.query.get(id)
-        if not listing:
-            return f"Imóvel base com ID {id} não encontrado."
-        
-        # Helper to convert types if needed
+        data = {}
         if campo == 'sample_number':
-            setattr(listing, campo, int(novo_valor) if novo_valor else None)
+            data[campo] = int(novo_valor) if novo_valor else None
         elif campo in ['area', 'rent_value', 'condo_fee']:
-             setattr(listing, campo, float(novo_valor))
+             data[campo] = float(novo_valor)
         elif campo in ['bedrooms', 'bathrooms', 'parking_spaces', 'living_rooms']:
-             setattr(listing, campo, int(novo_valor))
+             data[campo] = int(novo_valor)
         elif campo in ['address', 'neighborhood', 'city', 'state', 'link', 'type', 'purpose']:
-             setattr(listing, campo, novo_valor)
+             data[campo] = novo_valor
         else:
             return f"Campo '{campo}' não é válido ou não pode ser alterado por esta ferramenta."
             
-        if listing.evaluation:
-            listing.evaluation.recalculate_metrics()
+        response, status = update_base_listing(id, data)
+        if status != 200:
+             return f"Erro ao atualizar imóvel base: {response.get_json().get('error')}"
 
-        db.session.commit()
         return f"Imóvel base {id} atualizado com sucesso."
     except Exception as e:
-        db.session.rollback()
         return f"Erro ao atualizar imóvel base: {str(e)}"
 
 @tool
@@ -389,23 +369,13 @@ def deletar_imoveis_base(ids: List[int]):
     """
     try:
         count = 0
-        evaluations_to_update = set()
         for id in ids:
-            listing = BaseListing.query.get(id)
-            if listing:
-                if listing.evaluation:
-                    evaluations_to_update.add(listing.evaluation)
-                db.session.delete(listing)
+            response, status = delete_base_listing(id)
+            if status == 200:
                 count += 1
         
-        db.session.flush()
-        for evaluation in evaluations_to_update:
-            evaluation.recalculate_metrics()
-
-        db.session.commit()
         return f"{count} imóveis base deletados com sucesso."
     except Exception as e:
-        db.session.rollback()
         return f"Erro ao deletar imóveis base: {str(e)}"
 
 @tool
@@ -424,15 +394,17 @@ def adicionar_imoveis_base(evaluation_id: int, imoveis: List[Dict[str, Any]]):
     - finalidade/purpose (str): ex: Residencial
     """
     try:
-        evaluation = Evaluation.query.get(evaluation_id)
-        if not evaluation:
+        # Check if evaluation exists
+        response, status = get_evaluation(evaluation_id)
+        if status != 200:
             return f"Avaliação com ID {evaluation_id} não encontrada."
 
-        count = 0
-        # Get current max sample_number for auto-increment
-        existing_listings = BaseListing.query.filter_by(evaluation_id=evaluation_id).all()
-        next_sample_number = max([l.sample_number for l in existing_listings if l.sample_number], default=0) + 1
+        evaluation_data = response.get_json()
+        existing_listings = evaluation_data.get('base_listings', [])
         
+        next_sample_number = max([l.get('sample_number') for l in existing_listings if l.get('sample_number')], default=0) + 1
+        
+        count = 0
         for imovel in imoveis:
             # Helper function to get value from dict (supports both PT and EN keys)
             def get_attr(obj, attr_pt, attr_en=None):
@@ -441,34 +413,31 @@ def adicionar_imoveis_base(evaluation_id: int, imoveis: List[Dict[str, Any]]):
                     return obj.get(attr_pt) or (obj.get(attr_en) if attr_en else None)
                 return getattr(obj, attr_pt, None) or (getattr(obj, attr_en, None) if attr_en else None)
 
-            new_listing = BaseListing(
-                evaluation_id=evaluation_id,
-                sample_number=get_attr(imovel, 'numero_amostra', 'sample_number') or next_sample_number,
-                address=get_attr(imovel, 'endereco', 'address'),
-                neighborhood=get_attr(imovel, 'bairro', 'neighborhood'),
-                city=get_attr(imovel, 'cidade', 'city'),
-                state=get_attr(imovel, 'estado', 'state'),
-                link=get_attr(imovel, 'link'),
-                area=get_attr(imovel, 'area'),
-                bedrooms=get_attr(imovel, 'quartos', 'bedrooms') or 0,
-                bathrooms=get_attr(imovel, 'banheiros', 'bathrooms') or 0,
-                parking_spaces=get_attr(imovel, 'vagas', 'parking_spaces') or 0,
-                rent_value=get_attr(imovel, 'valor_aluguel', 'rent_value'),
-                condo_fee=get_attr(imovel, 'valor_condominio', 'condo_fee'),
-                type=get_attr(imovel, 'tipo', 'type'),
-                purpose=get_attr(imovel, 'finalidade', 'purpose'),
-                collected_at=datetime.utcnow()
-            )
-            db.session.add(new_listing)
-            count += 1
-            next_sample_number += 1
+            listing_data = {
+                "sample_number": get_attr(imovel, 'numero_amostra', 'sample_number') or next_sample_number,
+                "address": get_attr(imovel, 'endereco', 'address'),
+                "neighborhood": get_attr(imovel, 'bairro', 'neighborhood'),
+                "city": get_attr(imovel, 'cidade', 'city'),
+                "state": get_attr(imovel, 'estado', 'state'),
+                "link": get_attr(imovel, 'link'),
+                "area": get_attr(imovel, 'area'),
+                "bedrooms": get_attr(imovel, 'quartos', 'bedrooms') or 0,
+                "bathrooms": get_attr(imovel, 'banheiros', 'bathrooms') or 0,
+                "parking_spaces": get_attr(imovel, 'vagas', 'parking_spaces') or 0,
+                "rent_value": get_attr(imovel, 'valor_aluguel', 'rent_value'),
+                "condo_fee": get_attr(imovel, 'valor_condominio', 'condo_fee'),
+                "type": get_attr(imovel, 'tipo', 'type'),
+                "purpose": get_attr(imovel, 'finalidade', 'purpose'),
+                "collected_at": datetime.utcnow().isoformat()
+            }
+            
+            resp_l, status_l = create_base_listing(evaluation_id, listing_data)
+            if status_l == 201:
+                count += 1
+                next_sample_number += 1
         
-        db.session.flush()
-        evaluation.recalculate_metrics()
-        db.session.commit()
         return f"{count} imóveis base adicionados com sucesso à avaliação {evaluation_id}."
     except Exception as e:
-        db.session.rollback()
         return f"Erro ao adicionar imóveis base: {str(e)}"
 
 toolsList = [salvar_avaliacao_db, ler_instrucoes_para_nova_avaliacao, ler_instrucoes_para_atualizar_uma_avaliacao_existente, ler_avaliacao, listar_avaliacoes, alterar_avaliacao, deletar_avaliacao, ler_imovel_base, alterar_imovel_base, deletar_imoveis_base, adicionar_imoveis_base, ler_conteudo_site, pesquisar_sites]
