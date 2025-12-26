@@ -38,7 +38,8 @@ Base URL: `/admin`
   {
     "username": "string",
     "email": "string",
-    "is_admin": boolean
+    "is_admin": boolean,
+    "password": "string" (optional)
   }
   ```
 - **Response:**
