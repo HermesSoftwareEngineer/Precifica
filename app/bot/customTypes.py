@@ -1,7 +1,7 @@
 from typing import Annotated, List, Optional
 from typing_extensions import TypedDict
 from langgraph.graph.message import add_messages
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 class State(TypedDict):
     messages: Annotated[list[str], add_messages]
@@ -24,10 +24,7 @@ class ImovelConsiderado(BaseModel):
     tipo: Optional[str] = Field(None, alias="type", description="Tipo do imóvel (Apartamento, Casa, etc)")
     finalidade: Optional[str] = Field(None, alias="purpose", description="Finalidade (Residencial, Comercial)")
 
-    class Config:
-        allow_population_by_field_name = True
-        allow_population_by_alias = True
-        extra = "allow"
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
 
 class SalvarAvaliacaoInput(BaseModel):
     """Modelo de entrada para salvar a avaliação no banco de dados (Evaluation)."""
@@ -51,7 +48,4 @@ class SalvarAvaliacaoInput(BaseModel):
     preco_arredondado: Optional[float] = Field(None, alias="rounded_price", description="Preço estimado arredondado")
     imoveis_considerados: List[ImovelConsiderado] = Field(default_factory=list, alias="base_listings", description="Lista de imóveis base")
 
-    class Config:
-        allow_population_by_field_name = True
-        allow_population_by_alias = True
-        extra = "allow"
+    model_config = ConfigDict(populate_by_name=True, extra="allow")
