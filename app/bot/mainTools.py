@@ -21,7 +21,7 @@ def ler_instrucoes_para_nova_avaliacao():
 ### PROCESSO:
 
 1. **Coletar Dados do Imóvel**:
-   - Endereço completo, Área (m²), Quartos, Banheiros, Vagas, Finalidade (Venda/Aluguel)
+    - Endereço completo, Área (m²), Quartos, Banheiros, Vagas, Classificação (Venda/Aluguel), Finalidade (Residencial/Comercial)
    - Se faltar informação crítica (Bairro, Cidade, Área), pergunte ao usuário
 
 2. **Pesquisar Comparáveis**:
@@ -73,9 +73,9 @@ def ler_instrucoes_para_atualizar_uma_avaliacao_existente():
 
 2. **Tipos de Atualização**:
 
-   **A) Alterar Dados Principais** (`alterar_avaliacao`):
-   - `owner_name`, `appraiser_name`, `estimated_price`, `rounded_price`
-   - `description`, `classification`, `purpose`, `property_type`
+    **A) Alterar Dados Principais** (`alterar_avaliacao`):
+    - `owner_name`, `appraiser_name`, `estimated_price`, `rounded_price`
+    - `description`, `classification` (Venda/Aluguel), `purpose` (Residencial/Comercial), `property_type`
    - `bedrooms`, `bathrooms`, `parking_spaces`
    - `area` → ⚠️ recalcula métricas automaticamente
 
@@ -210,27 +210,35 @@ def salvar_avaliacao_db(
 
         # Create BaseListings
         for idx, imovel in enumerate(imoveis_considerados, start=1):
-            # Check if imovel is dict or object
-            def get_attr(obj, attr):
+            # Helper to support PT/EN keys when extracting listing data
+            def get_attr(obj, *attrs):
                 if isinstance(obj, dict):
-                    return obj.get(attr)
-                return getattr(obj, attr, None)
+                    for attr in attrs:
+                        value = obj.get(attr)
+                        if value not in (None, ""):
+                            return value
+                else:
+                    for attr in attrs:
+                        value = getattr(obj, attr, None)
+                        if value not in (None, ""):
+                            return value
+                return None
 
             listing_data = {
-                "sample_number": get_attr(imovel, 'numero_amostra') or idx,
-                "address": get_attr(imovel, 'endereco'),
-                "neighborhood": get_attr(imovel, 'bairro'),
-                "city": get_attr(imovel, 'cidade'),
-                "state": get_attr(imovel, 'estado'),
-                "link": get_attr(imovel, 'link'),
+                "sample_number": get_attr(imovel, 'numero_amostra', 'sample_number') or idx,
+                "address": get_attr(imovel, 'endereco', 'address'),
+                "neighborhood": get_attr(imovel, 'bairro', 'neighborhood'),
+                "city": get_attr(imovel, 'cidade', 'city'),
+                "state": get_attr(imovel, 'estado', 'state'),
+                "link": get_attr(imovel, 'link', 'url'),
                 "area": get_attr(imovel, 'area'),
-                "bedrooms": get_attr(imovel, 'quartos') or 0,
-                "bathrooms": get_attr(imovel, 'banheiros') or 0,
-                "parking_spaces": get_attr(imovel, 'vagas') or 0,
-                "rent_value": get_attr(imovel, 'valor_aluguel'),
-                "condo_fee": get_attr(imovel, 'valor_condominio'),
-                "type": get_attr(imovel, 'tipo'),
-                "purpose": get_attr(imovel, 'finalidade'),
+                "bedrooms": get_attr(imovel, 'quartos', 'bedrooms') or 0,
+                "bathrooms": get_attr(imovel, 'banheiros', 'bathrooms') or 0,
+                "parking_spaces": get_attr(imovel, 'vagas', 'parking_spaces') or 0,
+                "rent_value": get_attr(imovel, 'valor_aluguel', 'valor_total', 'rent_value', 'price', 'sale_value'),
+                "condo_fee": get_attr(imovel, 'valor_condominio', 'condo_fee'),
+                "type": get_attr(imovel, 'tipo', 'type'),
+                "purpose": get_attr(imovel, 'finalidade', 'purpose'),
                 "collected_at": datetime.utcnow().isoformat()
             }
             
@@ -407,11 +415,23 @@ def adicionar_imoveis_base(evaluation_id: int, imoveis: List[Dict[str, Any]]):
         count = 0
         for imovel in imoveis:
             # Helper function to get value from dict (supports both PT and EN keys)
-            def get_attr(obj, attr_pt, attr_en=None):
+            def get_attr(obj, attr_pt, attr_en=None, *extra_aliases):
                 if isinstance(obj, dict):
                     # Try Portuguese first, then English
-                    return obj.get(attr_pt) or (obj.get(attr_en) if attr_en else None)
-                return getattr(obj, attr_pt, None) or (getattr(obj, attr_en, None) if attr_en else None)
+                    for key in (attr_pt, attr_en, *extra_aliases):
+                        if not key:
+                            continue
+                        value = obj.get(key)
+                        if value not in (None, ""):
+                            return value
+                    return None
+                for key in (attr_pt, attr_en, *extra_aliases):
+                    if not key:
+                        continue
+                    value = getattr(obj, key, None)
+                    if value not in (None, ""):
+                        return value
+                return None
 
             listing_data = {
                 "sample_number": get_attr(imovel, 'numero_amostra', 'sample_number') or next_sample_number,
@@ -419,12 +439,12 @@ def adicionar_imoveis_base(evaluation_id: int, imoveis: List[Dict[str, Any]]):
                 "neighborhood": get_attr(imovel, 'bairro', 'neighborhood'),
                 "city": get_attr(imovel, 'cidade', 'city'),
                 "state": get_attr(imovel, 'estado', 'state'),
-                "link": get_attr(imovel, 'link'),
+                "link": get_attr(imovel, 'link', None, 'url'),
                 "area": get_attr(imovel, 'area'),
                 "bedrooms": get_attr(imovel, 'quartos', 'bedrooms') or 0,
                 "bathrooms": get_attr(imovel, 'banheiros', 'bathrooms') or 0,
                 "parking_spaces": get_attr(imovel, 'vagas', 'parking_spaces') or 0,
-                "rent_value": get_attr(imovel, 'valor_aluguel', 'rent_value'),
+                "rent_value": get_attr(imovel, 'valor_aluguel', 'rent_value', 'valor_total', 'price', 'sale_value'),
                 "condo_fee": get_attr(imovel, 'valor_condominio', 'condo_fee'),
                 "type": get_attr(imovel, 'tipo', 'type'),
                 "purpose": get_attr(imovel, 'finalidade', 'purpose'),
