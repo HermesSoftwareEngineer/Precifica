@@ -109,28 +109,40 @@ def salvar_avaliacao_db(
 
         # Create BaseListings
         for idx, imovel in enumerate(imoveis_considerados, start=1):
-            # Check if imovel is dict or object
-            def get_attr(obj, attr):
+            # Check if imovel is dict or object and allow PT/EN keys
+            def get_attr(obj, *attrs):
                 if isinstance(obj, dict):
-                    return obj.get(attr)
-                return getattr(obj, attr, None)
+                    for attr in attrs:
+                        if not attr:
+                            continue
+                        value = obj.get(attr)
+                        if value not in (None, ""):
+                            return value
+                else:
+                    for attr in attrs:
+                        if not attr:
+                            continue
+                        value = getattr(obj, attr, None)
+                        if value not in (None, ""):
+                            return value
+                return None
 
             novo_imovel = BaseListing(
                 evaluation_id=nova_avaliacao.id,
-                sample_number=get_attr(imovel, 'numero_amostra') or idx,
-                address=get_attr(imovel, 'endereco'),
-                neighborhood=get_attr(imovel, 'bairro'),
-                city=get_attr(imovel, 'cidade'),
-                state=get_attr(imovel, 'estado'),
-                link=get_attr(imovel, 'link'),
+                sample_number=get_attr(imovel, 'numero_amostra', 'sample_number') or idx,
+                address=get_attr(imovel, 'endereco', 'address'),
+                neighborhood=get_attr(imovel, 'bairro', 'neighborhood'),
+                city=get_attr(imovel, 'cidade', 'city'),
+                state=get_attr(imovel, 'estado', 'state'),
+                link=get_attr(imovel, 'link', 'url'),
                 area=get_attr(imovel, 'area'),
-                bedrooms=get_attr(imovel, 'quartos') or 0,
-                bathrooms=get_attr(imovel, 'banheiros') or 0,
-                parking_spaces=get_attr(imovel, 'vagas') or 0,
-                rent_value=get_attr(imovel, 'valor_aluguel'),
-                condo_fee=get_attr(imovel, 'valor_condominio'),
-                type=get_attr(imovel, 'tipo'),
-                purpose=get_attr(imovel, 'finalidade'),
+                bedrooms=get_attr(imovel, 'quartos', 'bedrooms') or 0,
+                bathrooms=get_attr(imovel, 'banheiros', 'bathrooms') or 0,
+                parking_spaces=get_attr(imovel, 'vagas', 'parking_spaces') or 0,
+                rent_value=get_attr(imovel, 'valor_aluguel', 'valor_total', 'rent_value', 'price', 'sale_value'),
+                condo_fee=get_attr(imovel, 'valor_condominio', 'condo_fee'),
+                type=get_attr(imovel, 'tipo', 'type'),
+                purpose=get_attr(imovel, 'finalidade', 'purpose'),
                 collected_at=datetime.utcnow()
             )
             db.session.add(novo_imovel)
