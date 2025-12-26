@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
-from app.controllers.auth_controller import register_user, login_user_by_email, logout
+from flask_jwt_extended import jwt_required, get_jwt_identity
+from app.controllers.auth_controller import register_user, login_user_by_email, logout, change_user_password
 from app.models.user import User
 import logging
 
@@ -47,6 +48,26 @@ def login():
     else:
         logger.warning(f"Login failed for email: {data.get('email')}")
         return jsonify({'error': 'Login Unsuccessful. Please check email and password'}), 401
+
+@auth_bp.route("/change-password", methods=['POST'])
+@jwt_required()
+def change_password():
+    logger.info("Change password route accessed")
+    current_user_id = get_jwt_identity()
+    
+    data = request.get_json()
+    if not data or not data.get('current_password') or not data.get('new_password'):
+        return jsonify({'error': 'Missing current or new password'}), 400
+        
+    success, message = change_user_password(current_user_id, data['current_password'], data['new_password'])
+    
+    if success:
+        return jsonify({'message': message}), 200
+    else:
+        # If it's an invalid password, 401 might be more appropriate, but 400 is also fine for bad request logic.
+        # Given the controller returns "Invalid current password", 400 or 401 is fine. Let's stick to 400 for simplicity or 401 if strictly auth failure.
+        # Usually "Invalid current password" implies the request is bad because the provided credentials to perform the action are wrong.
+        return jsonify({'error': message}), 400
 
 @auth_bp.route("/logout", methods=['POST'])
 def logout_route():

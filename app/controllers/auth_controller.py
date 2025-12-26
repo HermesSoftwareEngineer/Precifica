@@ -24,6 +24,23 @@ def login_user_by_email(email, password):
     logger.warning(f"Login failed for email: {email}")
     return None, None
 
+def change_user_password(user_id, current_password, new_password):
+    logger.info(f"Attempting password change for user_id: {user_id}")
+    user = User.query.get(user_id)
+    if not user:
+        logger.warning(f"User not found: {user_id}")
+        return False, "User not found"
+    
+    if not bcrypt.check_password_hash(user.password, current_password):
+        logger.warning(f"Invalid current password for user: {user_id}")
+        return False, "Invalid current password"
+    
+    hashed_password = bcrypt.generate_password_hash(new_password).decode('utf-8')
+    user.password = hashed_password
+    db.session.commit()
+    logger.info(f"Password changed successfully for user: {user_id}")
+    return True, "Password changed successfully"
+
 def logout():
     logger.info("Logging out user")
     # Client side should discard the token

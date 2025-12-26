@@ -21,11 +21,13 @@ def create_user_admin(username, email, password, is_admin=False):
     logger.info(f"User created successfully: {user.id}")
     return user
 
-def update_user_admin(user, username, email, is_admin):
+def update_user_admin(user, username, email, is_admin, password=None):
     logger.info(f"Updating user {user.id}: username={username}, email={email}, is_admin={is_admin}")
     user.username = username
     user.email = email
     user.is_admin = is_admin
+    if password:
+        user.password = bcrypt.generate_password_hash(password).decode('utf-8')
     db.session.commit()
     logger.info(f"User {user.id} updated successfully")
     return user
