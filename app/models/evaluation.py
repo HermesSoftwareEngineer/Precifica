@@ -63,7 +63,12 @@ class Evaluation(db.Model):
             
         if self.area:
             self.estimated_price = self.area * self.region_value_sqm
-            self.rounded_price = round(self.estimated_price)
+            
+            classification_lower = (self.classification or "").lower()
+            if "venda" in classification_lower or "sale" in classification_lower:
+                self.rounded_price = round(self.estimated_price / 10000) * 10000
+            else:
+                self.rounded_price = round(self.estimated_price / 10) * 10
         else:
             self.estimated_price = 0.0
             self.rounded_price = 0.0
