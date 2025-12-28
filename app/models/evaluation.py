@@ -30,6 +30,9 @@ class Evaluation(db.Model):
     # Relationship with BaseListing
     base_listings = db.relationship('BaseListing', backref='evaluation', lazy=True, cascade="all, delete-orphan")
 
+    # Relationship with Conversation
+    conversations = db.relationship('Conversation', backref='evaluation', lazy=True, cascade="all, delete-orphan")
+
     def recalculate_metrics(self):
         """
         Recalculates region_value_sqm, estimated_price, rounded_price, and analyzed_properties_count
