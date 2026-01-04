@@ -4,15 +4,17 @@ from langgraph.graph import StateGraph, START, END
 from customTypes import State
 from mainNodes import responder
 from langgraph.checkpoint.postgres import PostgresSaver
-from psycopg_pool import ConnectionPool
+from psycopg import Connection
+from psycopg.rows import dict_row
 from langgraph.prebuilt import tools_condition
 from mainTools import tools_node
 
 load_dotenv()
 
 DB_URI = os.environ.get("DATABASE_URL")
-pool = ConnectionPool(conninfo=DB_URI, max_size=20, kwargs={"autocommit": True})
-checkpointer = PostgresSaver(pool)
+# Use a single Connection with prepare_threshold=None to avoid pool-related prepared-statement races
+conn = Connection.connect(DB_URI, autocommit=True, prepare_threshold=None, row_factory=dict_row)
+checkpointer = PostgresSaver(conn)
 # checkpointer.setup() # Moved to scripts/init_langgraph_db.py to avoid transaction errors during startup
 
 graph_builder = StateGraph(State)
