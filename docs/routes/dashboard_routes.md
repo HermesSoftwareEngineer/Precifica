@@ -50,12 +50,12 @@ Retrieves aggregated data suitable for rendering charts (e.g., evaluations by ci
                 "Rio de Janeiro": 30
             },
             "evaluations_by_type": {
-                "Apartment": 100,
-                "House": 50
+                "Apartamento": 100,
+                "Casa": 50
             },
             "evaluations_by_purpose": {
-                "Residential": 140,
-                "Commercial": 10
+                "Residencial": 140,
+                "Comercial": 10
             }
         }
         ```
