@@ -38,6 +38,170 @@ The API uses **JWT (JSON Web Token)** authentication. You must include the JWT t
   ```
 - **Response:** JSON representation of the created evaluation (including auto-calculated fields).
 
+## 1.1 Create Evaluation with AI
+- **URL:** `/ai`
+- **Method:** `POST`
+- **Auth Required:** Yes
+- **Description:** Creates a new evaluation and immediately triggers the AI to research comparable listings and add base listings to the evaluation. If no `ai_prompt` is provided, the system builds a default prompt from the created evaluation data.
+- **Body:** Same as Create Evaluation, plus optional AI fields.
+  ```json
+  {
+    "address": "string",
+    "neighborhood": "string",
+    "city": "string",
+    "state": "string",
+    "area": number,
+    "analysis_type": "string",
+    "owner_name": "string (optional)",
+    "appraiser_name": "string (optional)",
+    "description": "string (optional)",
+    "classification": "string (optional)",
+    "purpose": "string (optional)",
+    "property_type": "string (optional)",
+    "bedrooms": number,
+    "bathrooms": number,
+    "parking_spaces": number,
+    "ai_prompt": "string (optional)",
+    "ai_force_new_chat": true
+  }
+  ```
+- **Response:** JSON with the created evaluation and the AI response payload.
+  ```json
+  {
+    "evaluation": {
+      "id": 1,
+      "address": "Rua Exemplo, 123",
+      "neighborhood": "Centro",
+      "city": "Sao Paulo",
+      "state": "SP",
+      "area": 100.0,
+      "analysis_type": "region",
+      "created_at": "2023-10-27T10:00:00"
+    },
+    "ai": {
+      "response": "string",
+      "conversation_id": 10,
+      "message_id": 55
+    }
+  }
+  ```
+
+## 1.2 Create Evaluation with AI (Async)
+- **URL:** `/ai/async`
+- **Method:** `POST`
+- **Auth Required:** Yes
+- **Description:** Creates a new evaluation and queues the AI flow in the background. Use SSE to receive progress events and listing updates.
+- **Body:** Same as Create Evaluation, plus optional AI fields.
+  ```json
+  {
+    "address": "string",
+    "neighborhood": "string",
+    "city": "string",
+    "state": "string",
+    "area": number,
+    "analysis_type": "string",
+    "owner_name": "string (optional)",
+    "appraiser_name": "string (optional)",
+    "description": "string (optional)",
+    "classification": "string (optional)",
+    "purpose": "string (optional)",
+    "property_type": "string (optional)",
+    "bedrooms": number,
+    "bathrooms": number,
+    "parking_spaces": number,
+    "ai_prompt": "string (optional)",
+    "ai_force_new_chat": true
+  }
+  ```
+- **Response:**
+  - `202 Accepted`:
+    ```json
+    {
+      "status": "queued",
+      "evaluation": {
+        "id": 1,
+        "address": "Rua Exemplo, 123",
+        "neighborhood": "Centro",
+        "city": "Sao Paulo",
+        "state": "SP",
+        "area": 100.0,
+        "analysis_type": "region",
+        "created_at": "2023-10-27T10:00:00"
+      },
+      "conversation_id": 10,
+      "message_id": 55
+    }
+    ```
+
+### SSE Stream for AI Progress
+- **URL:** `/<evaluation_id>/ai/stream`
+- **Method:** `GET`
+- **Auth Required:** Yes (same JWT header)
+- **Note:** Native `EventSource` cannot set `Authorization` headers. Use cookie-based auth, a polyfill that supports headers, or a custom fetch stream if you must send a bearer token.
+- **Description:** Streams progress events while the AI adds base listings.
+- **Events:**
+  - `connected`: stream is ready
+  - `evaluation_created`: evaluation data right after creation
+  - `ai_queued`: background AI job queued (includes conversation_id, message_id)
+  - `listing_added`: a new base listing was added; includes updated evaluation metrics
+  - `cancelled`: AI research stopped by user
+  - `done`: AI finished processing
+- **Frontend example:**
+  ```javascript
+  const source = new EventSource(`${API_BASE}/api/evaluations/${evaluationId}/ai/stream`, {
+    withCredentials: true
+  });
+
+  source.addEventListener('connected', (event) => {
+    const data = JSON.parse(event.data);
+    console.log('SSE connected', data);
+  });
+
+  source.addEventListener('evaluation_created', (event) => {
+    const data = JSON.parse(event.data);
+    // Update UI with evaluation data (no listings yet)
+    renderEvaluation(data);
+  });
+
+  source.addEventListener('listing_added', (event) => {
+    const data = JSON.parse(event.data);
+    // Update UI with new listing + updated evaluation metrics
+    addListing(data.listing);
+    updateEvaluation(data.evaluation);
+  });
+
+  source.addEventListener('done', (event) => {
+    const data = JSON.parse(event.data);
+    // Mark UI as finished
+    finishEvaluationStream(data);
+  });
+
+  source.addEventListener('cancelled', (event) => {
+    const data = JSON.parse(event.data);
+    // Mark UI as cancelled
+    cancelEvaluationStream(data);
+  });
+
+  source.onerror = () => {
+    // Reconnect or show a warning if needed
+    source.close();
+  };
+  ```
+
+### Cancel AI Research
+- **URL:** `/<evaluation_id>/ai/cancel`
+- **Method:** `POST`
+- **Auth Required:** Yes
+- **Description:** Stops the AI research flow for the evaluation. The SSE stream emits `cancelled`.
+- **Response:**
+  - `200 OK`:
+    ```json
+    {
+      "status": "cancelled",
+      "evaluation_id": 1
+    }
+    ```
+
 ## 2. Get Evaluations
 - **URL:** `/`
 - **Method:** `GET`

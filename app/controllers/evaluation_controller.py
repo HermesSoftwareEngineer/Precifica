@@ -1,6 +1,7 @@
 from flask import jsonify, request
 from app.models.evaluation import Evaluation, BaseListing
 from app.extensions import db
+from app.services.sse import publish_event
 from datetime import datetime
 import logging
 
@@ -245,7 +246,7 @@ def delete_evaluation(evaluation_id):
 def create_base_listing(evaluation_id, data=None):
     logger.info(f"Creating base listing for evaluation: {evaluation_id}")
     # Ensure evaluation exists
-    Evaluation.query.get_or_404(evaluation_id)
+    evaluation = Evaluation.query.get_or_404(evaluation_id)
     if data is None:
         data = request.get_json()
     
@@ -275,13 +276,21 @@ def create_base_listing(evaluation_id, data=None):
             area=data.get('area')
         )
         db.session.add(new_listing)
-        db.session.flush()
-        
-        evaluation = Evaluation.query.get(evaluation_id)
-        if evaluation:
-            evaluation.recalculate_metrics()
+
+        evaluation.recalculate_metrics()
 
         db.session.commit()
+        
+        # Refresh evaluation from database after commit
+        evaluation_refreshed = Evaluation.query.get(evaluation_id)
+        publish_event(
+            f"evaluation:{evaluation_id}",
+            "listing_added",
+            {
+                "listing": new_listing.to_dict(),
+                "evaluation": evaluation_refreshed.to_dict() if evaluation_refreshed else evaluation.to_dict()
+            }
+        )
         return jsonify(new_listing.to_dict()), 201
     except Exception as e:
         db.session.rollback()
