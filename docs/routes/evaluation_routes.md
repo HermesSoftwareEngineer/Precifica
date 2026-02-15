@@ -33,7 +33,8 @@ The API uses **JWT (JSON Web Token)** authentication. You must include the JWT t
     "property_type": "string (optional)",
     "bedrooms": number,
     "bathrooms": number,
-    "parking_spaces": number
+    "parking_spaces": number,
+    "depreciation": number (optional, default: 0.0, range: 0-100)
   }
   ```
 - **Response:** JSON representation of the created evaluation (including auto-calculated fields).
@@ -61,6 +62,7 @@ The API uses **JWT (JSON Web Token)** authentication. You must include the JWT t
     "bedrooms": number,
     "bathrooms": number,
     "parking_spaces": number,
+    "depreciation": number (optional, default: 0.0, range: 0-100),
     "ai_prompt": "string (optional)",
     "ai_force_new_chat": true
   }
@@ -243,6 +245,9 @@ The API uses **JWT (JSON Web Token)** authentication. You must include the JWT t
         "bathrooms": 2,
         "parking_spaces": 1,
         "analyzed_properties_count": 5,
+        "active_listings_count": 5,
+        "inactive_listings_count": 2,
+        "total_listings_count": 7,
         "created_at": "2023-10-27T10:00:00"
       }
     ],
@@ -284,6 +289,9 @@ The API uses **JWT (JSON Web Token)** authentication. You must include the JWT t
     "bathrooms": 2,
     "parking_spaces": 1,
     "analyzed_properties_count": 5,
+    "active_listings_count": 5,
+    "inactive_listings_count": 2,
+    "total_listings_count": 7,
     "created_at": "2023-10-27T10:00:00",
     "base_listings": [
       {
@@ -304,7 +312,9 @@ The API uses **JWT (JSON Web Token)** authentication. You must include the JWT t
         "condo_fee": 500.0,
         "purpose": "Residencial",
         "type": "Apartamento",
-        "area": 95.0
+        "area": 95.0,
+        "is_active": true,
+        "deactivation_reason": null
       }
     ]
   }
@@ -329,7 +339,28 @@ The API uses **JWT (JSON Web Token)** authentication. You must include the JWT t
 - **URL:** `/<evaluation_id>/listings`
 - **Method:** `POST`
 - **Description:** Adds a comparable listing to an evaluation. Automatically triggers a recalculation of the parent evaluation's metrics (`region_value_sqm`, `estimated_price`, `rounded_price`, `analyzed_properties_count`). The `sample_number` field can be used to identify the listing within the evaluation context.
-- **Body:** Listing details (including optional `sample_number`).
+- **Body:** Listing details (including optional `sample_number`, `is_active`, `deactivation_reason`).
+  ```json
+  {
+    "sample_number": 1,
+    "address": "Rua Exemplo, 123",
+    "neighborhood": "Centro",
+    "city": "São Paulo",
+    "state": "SP",
+    "link": "http://...",
+    "bedrooms": 2,
+    "bathrooms": 1,
+    "living_rooms": 1,
+    "parking_spaces": 1,
+    "rent_value": 5000.0,
+    "condo_fee": 500.0,
+    "purpose": "Residencial",
+    "type": "Apartamento",
+    "area": 95.0,
+    "is_active": true,
+    "deactivation_reason": null
+  }
+  ```
 - **Response:** JSON object of the created listing.
 
 ## 7. Get Base Listings
@@ -347,11 +378,154 @@ The API uses **JWT (JSON Web Token)** authentication. You must include the JWT t
 ## 9. Update Base Listing (Direct)
 - **URL:** `/listings/<listing_id>`
 - **Method:** `PUT`
-- **Description:** Updates a specific listing. Automatically triggers a recalculation of the parent evaluation's metrics.
-- **Response:** JSON object of the updated listing.
+- **Description:** Updates a specific listing. Automatically triggers a recalculation of the parent evaluation's metrics. Use `is_active` and `deactivation_reason` to activate/deactivate samples without deleting them.
+- **Body (Example - Deactivate):**
+  ```json
+  {
+    "is_active": false,
+    "deactivation_reason": "Outlier - valor muito acima da média"
+  }
+  ```
+
+---
+
+## Sample Activation Management
+
+### Overview
+Samples (base_listings) can be activated/deactivated instead of deleted. Inactive samples are excluded from metric calculations but remain in the database for audit purposes.
+
+### New Fields
+- **`is_active`** (Boolean, default: `true`): Controls if sample is used in calculations
+- **`deactivation_reason`** (Text, optional): Documents why sample was deactivated
+
+### Metric Calculation Rules
+Only **active** samples (`is_active = true`) are used to calculate:
+- `region_value_sqm`
+- `estimated_price`
+- `rounded_price`
+- `analyzed_properties_count`
+
+### Evaluation Response Enhancements
+Evaluation objects now include:
+- `active_listings_count`: Number of active samples
+- `inactive_listings_count`: Number of inactive samples
+- `total_listings_count`: Total samples (active + inactive)
+
+### Common Use Cases
+
+**Deactivate outlier:**
+```bash
+PUT /api/evaluations/listings/123
+{
+  "is_active": false,
+  "deactivation_reason": "Outlier - área muito diferente do alvo"
+}
+```
+
+**Reactivate sample:**
+```bash
+PUT /api/evaluations/listings/123
+{
+  "is_active": true,
+  "deactivation_reason": null
+}
+```
+
+### SSE Events
+Updating a listing triggers:
+- **Event:** `listing_updated`
+- **Channel:** `evaluation:{evaluation_id}`
+- **Payload:** Updated listing + recalculated evaluation metrics
+
+### Database Migration
+Run script to add activation fields to existing database:
+```bash
+python scripts/add_sample_activation_fields.py
+```
+
+Existing samples are marked active by default.
+- **Body (Example - Reactivate):**
+  ```json
+  {
+    "is_active": true,
+    "deactivation_reason": null
+  }
+  ```
+- **Response:** JSON object of the updated listing. Triggers SSE event `listing_updated` on channel `evaluation:{evaluation_id}`.
 
 ## 10. Delete Base Listing (Direct)
 - **URL:** `/listings/<listing_id>`
 - **Method:** `DELETE`
 - **Description:** Deletes a specific listing. Automatically triggers a recalculation of the parent evaluation's metrics.
 - **Response:** Success message.
+---
+
+## Depreciation Management
+
+### Overview
+Evaluations support a depreciation percentage that is applied to the estimated price before rounding. This allows adjusting the final valuation to account for property depreciation factors.
+
+### Depreciation Field
+- **`depreciation`** (Float, default: `0.0`, range: `0-100`)
+  - Percentage of depreciation to apply to the estimated price
+  - User-defined value representing property depreciation
+
+### Calculation Flow
+The system calculates prices as follows:
+
+1. **Calculate base estimated price:**
+   ```
+   estimated_price = area × region_value_sqm
+   ```
+
+2. **Apply depreciation:**
+   ```
+   price_after_depreciation = estimated_price × (1 - depreciation/100)
+   ```
+
+3. **Round the final value:**
+   - **Sale (Venda):** Round to nearest R$ 10.000
+   - **Rent (Aluguel):** Round to nearest R$ 10
+
+**Example:**
+- Area: 100 m²
+- Region value: R$ 5.000/m²
+- Depreciation: 15%
+- Classification: Sale
+
+```
+estimated_price = 100 × 5000 = R$ 500.000
+price_after_depreciation = 500000 × (1 - 15/100) = R$ 425.000
+rounded_price = round(425000 / 10000) × 10000 = R$ 420.000
+```
+
+### API Usage
+
+**Create evaluation with depreciation:**
+```bash
+POST /api/evaluations
+{
+  "address": "Rua Exemplo, 123",
+  "area": 100.0,
+  "depreciation": 15.0,
+  ...
+}
+```
+
+**Update depreciation:**
+```bash
+PUT /api/evaluations/123
+{
+  "depreciation": 20.0
+}
+```
+
+When `depreciation` or `area` is updated, metrics are automatically recalculated.
+
+### Database Migration
+Run script to add depreciation field to existing evaluations:
+```bash
+python scripts/add_depreciation_field.py
+```
+
+Existing evaluations are set to 0% depreciation by default.

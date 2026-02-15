@@ -86,7 +86,8 @@ def create_evaluation(data=None):
             bedrooms=data.get('bedrooms', 0),
             bathrooms=data.get('bathrooms', 0),
             parking_spaces=data.get('parking_spaces', 0),
-            analyzed_properties_count=data.get('analyzed_properties_count', 0)
+            analyzed_properties_count=data.get('analyzed_properties_count', 0),
+            depreciation=data.get('depreciation', 0.0)
         )
         db.session.add(new_evaluation)
         db.session.commit()
@@ -216,8 +217,9 @@ def update_evaluation(evaluation_id, data=None):
         evaluation.bathrooms = data.get('bathrooms', evaluation.bathrooms)
         evaluation.parking_spaces = data.get('parking_spaces', evaluation.parking_spaces)
         evaluation.analyzed_properties_count = data.get('analyzed_properties_count', evaluation.analyzed_properties_count)
+        evaluation.depreciation = data.get('depreciation', evaluation.depreciation)
         
-        if 'area' in data:
+        if 'area' in data or 'depreciation' in data:
             evaluation.recalculate_metrics()
 
         db.session.commit()
@@ -273,7 +275,9 @@ def create_base_listing(evaluation_id, data=None):
             condo_fee=data.get('condo_fee'),
             purpose=purpose,
             type=normalized_type,
-            area=data.get('area')
+            area=data.get('area'),
+            is_active=data.get('is_active', True),
+            deactivation_reason=data.get('deactivation_reason')
         )
         db.session.add(new_listing)
 
@@ -335,10 +339,29 @@ def update_base_listing(listing_id, data=None):
             listing.type = normalized_type
         listing.area = data.get('area', listing.area)
         
+        # Handle activation/deactivation
+        if 'is_active' in data:
+            listing.is_active = data.get('is_active')
+        if 'deactivation_reason' in data:
+            listing.deactivation_reason = data.get('deactivation_reason')
+        
         if listing.evaluation:
             listing.evaluation.recalculate_metrics()
 
         db.session.commit()
+        
+        # Refresh evaluation from database after commit
+        evaluation_refreshed = Evaluation.query.get(listing.evaluation_id) if listing.evaluation_id else None
+        if evaluation_refreshed:
+            publish_event(
+                f"evaluation:{listing.evaluation_id}",
+                "listing_updated",
+                {
+                    "listing": listing.to_dict(),
+                    "evaluation": evaluation_refreshed.to_dict()
+                }
+            )
+        
         return jsonify(listing.to_dict()), 200
     except Exception as e:
         db.session.rollback()

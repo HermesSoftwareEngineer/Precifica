@@ -24,6 +24,7 @@ class Evaluation(db.Model):
     bathrooms = db.Column(db.Integer, default=0)
     parking_spaces = db.Column(db.Integer, default=0)
     analyzed_properties_count = db.Column(db.Integer, default=0)
+    depreciation = db.Column(db.Float, default=0.0, nullable=False)  # Percentage (0-100)
     last_chat_id = db.Column(db.Integer, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -38,7 +39,8 @@ class Evaluation(db.Model):
         Recalculates region_value_sqm, estimated_price, rounded_price, and analyzed_properties_count
         based on the associated base_listings.
         """
-        listings = self.base_listings
+        # Only consider active listings
+        listings = [listing for listing in self.base_listings if listing.is_active]
         self.analyzed_properties_count = len(listings)
         
         if not listings:
@@ -64,14 +66,31 @@ class Evaluation(db.Model):
         if self.area:
             self.estimated_price = self.area * self.region_value_sqm
             
+            # Apply depreciation to estimated price before rounding
+            price_after_depreciation = self.estimated_price
+            if self.depreciation and self.depreciation > 0:
+                price_after_depreciation = self.estimated_price * (1 - self.depreciation / 100)
+            
             classification_lower = (self.classification or "").lower()
             if "venda" in classification_lower or "sale" in classification_lower:
-                self.rounded_price = round(self.estimated_price / 10000) * 10000
+                self.rounded_price = round(price_after_depreciation / 10000) * 10000
             else:
-                self.rounded_price = round(self.estimated_price / 10) * 10
+                self.rounded_price = round(price_after_depreciation / 10) * 10
         else:
             self.estimated_price = 0.0
             self.rounded_price = 0.0
+
+    def get_active_listings_count(self):
+        """Returns the count of active listings."""
+        return sum(1 for listing in self.base_listings if listing.is_active)
+    
+    def get_inactive_listings_count(self):
+        """Returns the count of inactive listings."""
+        return sum(1 for listing in self.base_listings if not listing.is_active)
+    
+    def get_total_listings_count(self):
+        """Returns the total count of all listings (active + inactive)."""
+        return len(self.base_listings)
 
     def to_dict(self, include_listings=False):
         data = {
@@ -95,6 +114,10 @@ class Evaluation(db.Model):
             'bathrooms': self.bathrooms,
             'parking_spaces': self.parking_spaces,
             'analyzed_properties_count': self.analyzed_properties_count,
+            'depreciation': self.depreciation,
+            'active_listings_count': self.get_active_listings_count(),
+            'inactive_listings_count': self.get_inactive_listings_count(),
+            'total_listings_count': self.get_total_listings_count(),
             'last_chat_id': self.last_chat_id,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
@@ -130,6 +153,8 @@ class BaseListing(db.Model):
     purpose = db.Column(db.String(50), nullable=True) # Residential, Commercial
     type = db.Column(db.String(50), nullable=True) # Apartment, House, etc.
     area = db.Column(db.Float, nullable=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    deactivation_reason = db.Column(db.Text, nullable=True)
 
     def to_dict(self):
         return {
@@ -150,7 +175,9 @@ class BaseListing(db.Model):
             'condo_fee': self.condo_fee,
             'purpose': self.purpose,
             'type': self.type,
-            'area': self.area
+            'area': self.area,
+            'is_active': self.is_active,
+            'deactivation_reason': self.deactivation_reason
         }
 
     def __repr__(self):
