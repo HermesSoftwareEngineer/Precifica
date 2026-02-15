@@ -42,8 +42,55 @@ The API uses **JWT (JSON Web Token)** authentication. You must include the JWT t
 - **URL:** `/`
 - **Method:** `GET`
 - **Auth Required:** Yes
-- **Description:** Retrieves a list of evaluations.
-- **Response:** JSON list of evaluations.
+- **Description:** Retrieves a list of evaluations with optional filters, sorting, and pagination.
+- **Query Params (optional):**
+  - `classification`: Filter by classification (e.g., Venda, Aluguel).
+  - `purpose`: Filter by purpose (e.g., Residencial, Comercial).
+  - `appraiser_name`: Filter by appraiser name (partial match).
+  - `min_price`: Minimum `rounded_price`.
+  - `max_price`: Maximum `rounded_price`.
+  - `start_date`: Start date/time for `created_at` (ISO 8601). If date-only, uses start of day.
+  - `end_date`: End date/time for `created_at` (ISO 8601). If date-only, uses end of day.
+  - `sort_dir`: `asc` or `desc` (default: `desc`) for `created_at`.
+  - `page`: Page number (default: `1`).
+  - `per_page`: Items per page (default: `20`).
+- **Response:** JSON object with `items` and `meta`.
+  ```json
+  {
+    "items": [
+      {
+        "id": 1,
+        "address": "Rua Exemplo, 123",
+        "neighborhood": "Centro",
+        "city": "São Paulo",
+        "state": "SP",
+        "area": 100.0,
+        "region_value_sqm": 5000.0,
+        "analysis_type": "region",
+        "owner_name": "João Silva",
+        "appraiser_name": "Maria Souza",
+        "estimated_price": 500000.0,
+        "rounded_price": 500000.0,
+        "description": "Avaliação realizada com base em imóveis da região.",
+        "classification": "Venda",
+        "purpose": "Residencial",
+        "property_type": "Apartamento",
+        "bedrooms": 3,
+        "bathrooms": 2,
+        "parking_spaces": 1,
+        "analyzed_properties_count": 5,
+        "created_at": "2023-10-27T10:00:00"
+      }
+    ],
+    "meta": {
+      "total": 1,
+      "page": 1,
+      "per_page": 20,
+      "total_pages": 1,
+      "sort_dir": "desc"
+    }
+  }
+  ```
 
 ## 3. Get Evaluation
 - **URL:** `/<evaluation_id>`
@@ -91,8 +138,8 @@ The API uses **JWT (JSON Web Token)** authentication. You must include the JWT t
         "collected_at": "2023-10-27T10:00:00",
         "rent_value": null,
         "condo_fee": 500.0,
-        "purpose": "Residential",
-        "type": "Apartment",
+        "purpose": "Residencial",
+        "type": "Apartamento",
         "area": 95.0
       }
     ]

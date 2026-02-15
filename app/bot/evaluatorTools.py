@@ -7,6 +7,57 @@ from app.extensions import db
 from app.models.evaluation import Evaluation, BaseListing
 from datetime import datetime
 
+def normalize_purpose(value):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        value = str(value)
+    normalized = value.strip()
+    lowered = normalized.lower()
+
+    if "residential" in lowered and "commercial" in lowered:
+        return "Residencial / Comercial"
+    if "residencial" in lowered and "comercial" in lowered:
+        return "Residencial / Comercial"
+    if "residential" in lowered or "residencial" in lowered:
+        return "Residencial"
+    if "commercial" in lowered or "comercial" in lowered:
+        return "Comercial"
+
+    return normalized
+
+def normalize_property_type(value):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        value = str(value)
+    normalized = value.strip()
+    lowered = normalized.lower()
+
+    mapping = [
+        ("apartamento", "Apartamento"),
+        ("apartment", "Apartamento"),
+        ("casa", "Casa"),
+        ("house", "Casa"),
+        ("kitnet", "Kitnet"),
+        ("loja", "Loja"),
+        ("store", "Loja"),
+        ("sala", "Sala"),
+        ("office", "Sala"),
+        ("terreno", "Terreno"),
+        ("land", "Terreno")
+    ]
+
+    found = []
+    for key, label in mapping:
+        if key in lowered and label not in found:
+            found.append(label)
+
+    if found:
+        return " / ".join(found)
+
+    return normalized
+
 @tool
 def ler_conteudo_site(url: str):
     """
@@ -81,6 +132,8 @@ def salvar_avaliacao_db(
     - finalidade (str): ex: Residencial
     """
     try:
+        normalized_purpose = normalize_purpose(purpose)
+        normalized_property_type = normalize_property_type(property_type)
         # Create Evaluation
         nova_avaliacao = Evaluation(
             address=endereco,
@@ -93,8 +146,8 @@ def salvar_avaliacao_db(
             parking_spaces=vagas,
             description=description,
             classification=classification,
-            purpose=purpose,
-            property_type=property_type,
+            purpose=normalized_purpose,
+            property_type=normalized_property_type,
             region_value_sqm=valor_regiao_m2,
             analysis_type=tipo_analise,
             owner_name=nome_proprietario,
@@ -127,6 +180,8 @@ def salvar_avaliacao_db(
                             return value
                 return None
 
+            listing_purpose = normalize_purpose(get_attr(imovel, 'finalidade', 'purpose'))
+            listing_type = normalize_property_type(get_attr(imovel, 'tipo', 'type'))
             novo_imovel = BaseListing(
                 evaluation_id=nova_avaliacao.id,
                 sample_number=get_attr(imovel, 'numero_amostra', 'sample_number') or idx,
@@ -141,8 +196,8 @@ def salvar_avaliacao_db(
                 parking_spaces=get_attr(imovel, 'vagas', 'parking_spaces') or 0,
                 rent_value=get_attr(imovel, 'valor_aluguel', 'valor_total', 'rent_value', 'price', 'sale_value'),
                 condo_fee=get_attr(imovel, 'valor_condominio', 'condo_fee'),
-                type=get_attr(imovel, 'tipo', 'type'),
-                purpose=get_attr(imovel, 'finalidade', 'purpose'),
+                type=listing_type,
+                purpose=listing_purpose,
                 collected_at=datetime.utcnow()
             )
             db.session.add(novo_imovel)

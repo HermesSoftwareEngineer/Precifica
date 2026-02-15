@@ -278,6 +278,9 @@ def listar_avaliacoes():
             return "Erro ao listar avaliações."
         
         evaluations = response.get_json()
+        if isinstance(evaluations, dict):
+            evaluations = evaluations.get('items', [])
+
         if not evaluations:
             return "Nenhuma avaliação encontrada."
         
