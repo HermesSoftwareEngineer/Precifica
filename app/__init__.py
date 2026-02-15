@@ -1,6 +1,8 @@
 import os
+from datetime import datetime, timedelta, timezone
 from flask import Flask
 from flask_cors import CORS
+from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity
 from config import Config
 from app.extensions import db, bcrypt, login_manager, cors, jwt
 
@@ -26,9 +28,26 @@ def create_app(config_class=Config):
         origins=[frontend_origin],
         methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
+        expose_headers=["X-New-Access-Token"],
         supports_credentials=supports_credentials
     )
     app.logger.info(f"CORS configurado com origin: {frontend_origin}")
+
+    @app.after_request
+    def refresh_expiring_jwts(response):
+        try:
+            exp_timestamp = get_jwt()["exp"]
+            now = datetime.now(timezone.utc)
+            # Renova o token se ele estiver expirando em menos de 1 hora (basicamente toda requisição)
+            # Isso garante que a contagem reinicie sempre que houver uso
+            target_timestamp = datetime.timestamp(now + timedelta(hours=1))
+            if target_timestamp > exp_timestamp:
+                access_token = create_access_token(identity=get_jwt_identity())
+                response.headers['X-New-Access-Token'] = access_token
+        except (RuntimeError, KeyError):
+            # Case where there is not a valid JWT. Just return the original response
+            return response
+        return response
 
     from app.routes.main_routes import main_bp
     from app.routes.auth_routes import auth_bp

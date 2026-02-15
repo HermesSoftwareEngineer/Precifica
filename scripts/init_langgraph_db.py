@@ -22,9 +22,10 @@ def init_db():
     # The error "CREATE INDEX CONCURRENTLY cannot run inside a transaction block" 
     # suggests we need to be careful about how the connection is used.
     
-    # Let's try using a pool and running setup. 
-    # If it fails here too, we might need to tweak connection args.
-    with ConnectionPool(conninfo=DB_URI, kwargs={"autocommit": True}) as pool:
+    # Let's try using a pool and running setup.
+    # Disable server-side prepared statements to avoid duplicate prepared statement errors
+    # when the pool shares connections across threads.
+    with ConnectionPool(conninfo=DB_URI, kwargs={"autocommit": True, "prepare_threshold": None}) as pool:
         checkpointer = PostgresSaver(pool)
         checkpointer.setup()
     print("Done.")
