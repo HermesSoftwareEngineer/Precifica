@@ -10,6 +10,8 @@ import json
 from datetime import datetime
 from typing import List, Dict, Any
 from app.bot.customTypes import SalvarAvaliacaoInput
+from app.services.ai_cancel import is_evaluation_canceled
+from app.services.sse import publish_event
 
 @tool
 def ler_instrucoes_para_nova_avaliacao():
@@ -32,6 +34,7 @@ def ler_instrucoes_para_nova_avaliacao():
 3. **Extrair Dados** (para cada imóvel):
    - Link, Endereço, Área (m²), Valor Total, Quartos, Banheiros, Vagas, Condomínio
    - Calcule: Valor/m² = Valor Total ÷ Área
+    - Se estiver adicionando a uma avaliação existente, adicione um imóvel por vez assim que validar
 
 4. **🚨 FILTRAR IMÓVEIS (CRÍTICO)**:
    - **REMOVA** imóveis com diferenças grandes em relação ao imóvel avaliado:
@@ -85,7 +88,7 @@ def ler_instrucoes_para_atualizar_uma_avaliacao_existente():
      - Área: ±30% do imóvel avaliado
      - Quartos/Banheiros/Vagas: ±3 unidade
      - Remova outliers de Valor/m²
-   - Use `adicionar_imoveis_base(evaluation_id, imoveis)`
+     - Use `adicionar_imoveis_base(evaluation_id, imoveis)` e adicione um imóvel por vez conforme validar
    - Métricas recalculam automaticamente
 
    **C) Remover Imóveis** (outliers, dados incorretos):
@@ -405,6 +408,9 @@ def adicionar_imoveis_base(evaluation_id: int, imoveis: List[Dict[str, Any]]):
     - finalidade/purpose (str): ex: Residencial
     """
     try:
+        if is_evaluation_canceled(evaluation_id):
+            publish_event(f"evaluation:{evaluation_id}", "cancelled", {"reason": "user_requested"})
+            return f"Operacao cancelada pelo usuario para avaliacao {evaluation_id}."
         # Check if evaluation exists
         response, status = get_evaluation(evaluation_id)
         if status != 200:
@@ -417,6 +423,9 @@ def adicionar_imoveis_base(evaluation_id: int, imoveis: List[Dict[str, Any]]):
         
         count = 0
         for imovel in imoveis:
+            if is_evaluation_canceled(evaluation_id):
+                publish_event(f"evaluation:{evaluation_id}", "cancelled", {"reason": "user_requested"})
+                return f"Operacao cancelada pelo usuario para avaliacao {evaluation_id}."
             # Helper function to get value from dict (supports both PT and EN keys)
             def get_attr(obj, attr_pt, attr_en=None, *extra_aliases):
                 if isinstance(obj, dict):

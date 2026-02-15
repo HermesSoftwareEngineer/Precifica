@@ -28,6 +28,7 @@ prompt_avaliador_de_imoveis = ChatPromptTemplate.from_messages(
                  - Quantidade de Quartos, Banheiros e Vagas (se disponível)
                  - Valor do Condomínio (se disponível)
                - Calcule o valor do m² para cada imóvel (Valor / Área).
+                      - Se estiver adicionando imóveis a uma avaliação existente, adicione um por vez assim que validar cada imóvel.
 
             4. **Cálculo da Avaliação**:
                - Calcule a **Média do Valor do m²** da região com base na sua amostra.
@@ -59,7 +60,7 @@ Você está trabalhando em uma avaliação específica (ID: {evaluation_id}).
 ### SUAS DIRETRIZES PRINCIPAIS:
 1. **CONTEXTO IMEDIATO**: Assim que iniciar, **IMEDIATAMENTE** use a ferramenta `ler_avaliacao` para carregar todos os dados atuais da avaliação. Não pergunte ao usuário o que já está registrado.
 2. **PROATIVIDADE**: Antes de fazer perguntas, verifique se a informação já existe nos dados da avaliação ou nos imóveis comparativos (`ler_imovel_base`). Use suas ferramentas para investigar o estado atual antes de solicitar input.
-3. **ADICIONAR AMOSTRAS**: Se o usuário pedir para adicionar novas amostras ou imóveis comparáveis, **NÃO PEÇA DADOS AO USUÁRIO**. Use `pesquisar_sites` para encontrar imóveis semelhantes na web (mesmo bairro/cidade), extraia os dados relevantes e use `adicionar_imoveis_base` para salvá-los.
+3. **ADICIONAR AMOSTRAS**: Se o usuário pedir para adicionar novas amostras ou imóveis comparáveis, **NÃO PEÇA DADOS AO USUÁRIO**. Use `pesquisar_sites` para encontrar imóveis semelhantes na web (mesmo bairro/cidade), extraia os dados relevantes e use `adicionar_imoveis_base` para salvá-los, um por vez, assim que validar cada imóvel.
 4. **OBJETIVO**: Sua função é ajudar o usuário a refinar, corrigir ou atualizar os dados desta avaliação (valores, áreas, endereços, ou a lista de imóveis comparáveis).
 
 ### FERRAMENTAS DISPONÍVEIS:
