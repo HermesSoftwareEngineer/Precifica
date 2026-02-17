@@ -7,6 +7,7 @@ from app.controllers.evaluation_controller import (
 from app.controllers.bot_controller import run_evaluation_chat, enqueue_evaluation_chat
 from app.services.sse import register_listener, remove_listener, publish_event, format_sse
 from app.services.ai_cancel import cancel_evaluation, clear_evaluation_cancel
+from app.utils.unit_helpers import get_user_with_active_unit
 from queue import Empty
 import logging
 
@@ -55,12 +56,18 @@ def _build_ai_prompt(evaluation_data):
 @jwt_required()
 def create_evaluation_route():
     logger.info("Create evaluation route accessed")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     return create_evaluation()
 
 @evaluation_bp.route('/ai', methods=['POST'])
 @jwt_required()
 def create_evaluation_with_ai_route():
     logger.info("Create evaluation with AI route accessed")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     data = request.get_json() or {}
     ai_prompt = data.pop('ai_prompt', None)
     ai_force_new_chat = data.pop('ai_force_new_chat', True)
@@ -111,6 +118,9 @@ def create_evaluation_with_ai_route():
 @jwt_required()
 def create_evaluation_with_ai_async_route():
     logger.info("Create evaluation with AI async route accessed")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     data = request.get_json() or {}
     ai_prompt = data.pop('ai_prompt', None)
     ai_force_new_chat = data.pop('ai_force_new_chat', True)
@@ -184,6 +194,9 @@ def stream_evaluation_ai_events(evaluation_id):
 @evaluation_bp.route('/<int:evaluation_id>/ai/cancel', methods=['POST'])
 @jwt_required()
 def cancel_evaluation_ai_route(evaluation_id):
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     cancel_evaluation(evaluation_id)
     publish_event(f"evaluation:{evaluation_id}", "cancelled", {"reason": "user_requested"})
     return jsonify({'status': 'cancelled', 'evaluation_id': evaluation_id}), 200
@@ -192,24 +205,36 @@ def cancel_evaluation_ai_route(evaluation_id):
 @jwt_required()
 def get_evaluations_route():
     logger.info("Get evaluations route accessed")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     return get_evaluations()
 
 @evaluation_bp.route('/<int:evaluation_id>', methods=['GET'])
 @jwt_required()
 def get_evaluation_route(evaluation_id):
     logger.info(f"Get evaluation route accessed for id: {evaluation_id}")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     return get_evaluation(evaluation_id)
 
 @evaluation_bp.route('/<int:evaluation_id>', methods=['PUT'])
 @jwt_required()
 def update_evaluation_route(evaluation_id):
     logger.info(f"Update evaluation route accessed for id: {evaluation_id}")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     return update_evaluation(evaluation_id)
 
 @evaluation_bp.route('/<int:evaluation_id>', methods=['DELETE'])
 @jwt_required()
 def delete_evaluation_route(evaluation_id):
     logger.info(f"Delete evaluation route accessed for id: {evaluation_id}")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     return delete_evaluation(evaluation_id)
 
 # Base Listing Routes (Nested under evaluations for creation/listing)
@@ -217,12 +242,18 @@ def delete_evaluation_route(evaluation_id):
 @jwt_required()
 def create_base_listing_route(evaluation_id):
     logger.info(f"Create base listing route accessed for evaluation: {evaluation_id}")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     return create_base_listing(evaluation_id)
 
 @evaluation_bp.route('/<int:evaluation_id>/listings', methods=['GET'])
 @jwt_required()
 def get_base_listings_route(evaluation_id):
     logger.info(f"Get base listings route accessed for evaluation: {evaluation_id}")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     return get_base_listings(evaluation_id)
 
 # Base Listing Routes (Direct access for update/delete/get single)
@@ -230,16 +261,25 @@ def get_base_listings_route(evaluation_id):
 @jwt_required()
 def get_base_listing_route(listing_id):
     logger.info(f"Get base listing route accessed for listing: {listing_id}")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     return get_base_listing(listing_id)
 
 @evaluation_bp.route('/listings/<int:listing_id>', methods=['PUT'])
 @jwt_required()
 def update_base_listing_route(listing_id):
     logger.info(f"Update base listing route accessed for listing: {listing_id}")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     return update_base_listing(listing_id)
 
 @evaluation_bp.route('/listings/<int:listing_id>', methods=['DELETE'])
 @jwt_required()
 def delete_base_listing_route(listing_id):
     logger.info(f"Delete base listing route accessed for listing: {listing_id}")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     return delete_base_listing(listing_id)

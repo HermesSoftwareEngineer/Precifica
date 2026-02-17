@@ -19,6 +19,7 @@ from app.bot.prompts import prompt_ajuste_avaliacao
 from app.bot.llms import llm_main
 from app.models.chat import Conversation, Message
 from app.models.evaluation import Evaluation
+from app.models.user import User
 from app.extensions import db
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from datetime import datetime
@@ -64,11 +65,14 @@ def chat():
         try:
             verify_jwt_in_request()
             user_id = int(get_jwt_identity())
+            user = User.query.get(user_id)
+            unit_id = user.active_unit_id if user else None
         except:
             user_id = None
-        logger.info(f"Creating new conversation for user: {user_id}")
+            unit_id = None
+        logger.info(f"Creating new conversation for user: {user_id}, unit: {unit_id}")
         title = generate_conversation_title(user_input)
-        conversation = Conversation(user_id=user_id, title=title)
+        conversation = Conversation(user_id=user_id, unit_id=unit_id, title=title)
         db.session.add(conversation)
         db.session.commit()
         conversation_id = conversation.id
@@ -260,11 +264,14 @@ def chat_async():
         try:
             verify_jwt_in_request()
             user_id = int(get_jwt_identity())
+            user = User.query.get(user_id)
+            unit_id = user.active_unit_id if user else None
         except Exception:
             user_id = None
-        logger.info(f"Creating new conversation for user: {user_id}")
+            unit_id = None
+        logger.info(f"Creating new conversation for user: {user_id}, unit: {unit_id}")
         title = generate_conversation_title(user_input)
-        conversation = Conversation(user_id=user_id, title=title)
+        conversation = Conversation(user_id=user_id, unit_id=unit_id, title=title)
         db.session.add(conversation)
         db.session.commit()
         conversation_id = conversation.id
@@ -313,14 +320,17 @@ def run_evaluation_chat(evaluation_id, user_input, force_new_chat=False, user_id
                 user_id = int(get_jwt_identity())
             except Exception:
                 user_id = None
+        
+        # Get unit_id from evaluation
+        unit_id = evaluation.unit_id
 
-        conversation = Conversation(user_id=user_id, title=f"Ajuste Avaliacao #{evaluation_id}", evaluation_id=evaluation_id)
+        conversation = Conversation(user_id=user_id, unit_id=unit_id, title=f"Ajuste Avaliacao #{evaluation_id}", evaluation_id=evaluation_id)
         db.session.add(conversation)
         db.session.flush()
 
         evaluation.last_chat_id = conversation.id
         db.session.commit()
-        logger.info(f"New conversation created: {conversation.id}")
+        logger.info(f"New conversation created: {conversation.id}, unit: {unit_id}")
 
     # 2. Preparar mensagem (Concatenar prompt se for nova conversa)
     if is_new_conversation:

@@ -1,6 +1,7 @@
 from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
 from app.controllers.dashboard_controller import DashboardController
+from app.utils.unit_helpers import get_user_with_active_unit
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,6 +22,9 @@ def get_dashboard_stats():
     - Preço médio do m² por nº de quartos
     """
     logger.info("Dashboard stats requested")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     data = DashboardController.get_dashboard_stats()
     if "error" in data:
         logger.error(f"Error in dashboard stats: {data['error']}")

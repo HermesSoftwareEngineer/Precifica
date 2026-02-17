@@ -4,6 +4,7 @@ from app.controllers.conversation_controller import (
     create_conversation, get_user_conversations, get_conversation_by_id,
     update_conversation_title, delete_conversation_by_id, get_conversation_messages
 )
+from app.utils.unit_helpers import get_user_with_active_unit
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,9 @@ conversation_bp = Blueprint('conversation', __name__, url_prefix='/api/conversat
 @conversation_bp.route('/', methods=['GET'])
 @jwt_required()
 def list_conversations():
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     user_id = get_jwt_identity()
     logger.info(f"User {user_id} listing conversations")
     conversations = get_user_conversations()
@@ -21,6 +25,9 @@ def list_conversations():
 @conversation_bp.route('/', methods=['POST'])
 @jwt_required()
 def new_conversation():
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     user_id = get_jwt_identity()
     logger.info(f"User {user_id} creating new conversation")
     data = request.get_json() or {}
@@ -40,6 +47,9 @@ def new_conversation():
 @conversation_bp.route('/<int:conversation_id>', methods=['GET'])
 @jwt_required()
 def get_conversation(conversation_id):
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     user_id = int(get_jwt_identity())
     logger.info(f"User {user_id} requesting conversation {conversation_id}")
     conversation = get_conversation_by_id(conversation_id)
@@ -62,6 +72,9 @@ def get_conversation(conversation_id):
 @conversation_bp.route('/<int:conversation_id>', methods=['PUT'])
 @jwt_required()
 def update_conversation(conversation_id):
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     user_id = int(get_jwt_identity())
     logger.info(f"User {user_id} updating conversation {conversation_id}")
     conversation = get_conversation_by_id(conversation_id)
@@ -87,6 +100,9 @@ def update_conversation(conversation_id):
 @conversation_bp.route('/<int:conversation_id>', methods=['DELETE'])
 @jwt_required()
 def delete_conversation(conversation_id):
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
     user_id = int(get_jwt_identity())
     logger.info(f"User {user_id} deleting conversation {conversation_id}")
     conversation = get_conversation_by_id(conversation_id)

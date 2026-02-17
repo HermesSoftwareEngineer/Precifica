@@ -5,6 +5,7 @@ class Evaluation(db.Model):
     __tablename__ = 'evaluations'
 
     id = db.Column(db.Integer, primary_key=True)
+    unit_id = db.Column(db.Integer, db.ForeignKey('units.id'), nullable=False)
     address = db.Column(db.String(255), nullable=False)
     neighborhood = db.Column(db.String(100), nullable=False)
     city = db.Column(db.String(100), nullable=False)
@@ -95,6 +96,7 @@ class Evaluation(db.Model):
     def to_dict(self, include_listings=False):
         data = {
             'id': self.id,
+            'unit_id': self.unit_id,
             'address': self.address,
             'neighborhood': self.neighborhood,
             'city': self.city,
