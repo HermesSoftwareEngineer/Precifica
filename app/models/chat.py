@@ -4,6 +4,7 @@ from datetime import datetime
 class Conversation(db.Model):
     __tablename__ = 'conversations'
     id = db.Column(db.Integer, primary_key=True)
+    unit_id = db.Column(db.Integer, db.ForeignKey('units.id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     evaluation_id = db.Column(db.Integer, db.ForeignKey('evaluations.id'), nullable=True)
     title = db.Column(db.String(100), nullable=False, default="New Conversation")
@@ -15,6 +16,7 @@ class Conversation(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'unit_id': self.unit_id,
             'user_id': self.user_id,
             'evaluation_id': self.evaluation_id,
             'title': self.title,

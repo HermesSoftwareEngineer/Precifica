@@ -1,5 +1,7 @@
 from app.extensions import db
 from app.models.evaluation import Evaluation
+from app.models.user import User
+from flask_jwt_extended import get_jwt_identity
 from sqlalchemy import func, desc, case
 import logging
 
@@ -20,12 +22,21 @@ class DashboardController:
         """
         logger.info("Fetching dashboard statistics")
         try:
+            # Get user's active unit
+            user_id = get_jwt_identity()
+            user = User.query.get(int(user_id))
+            if not user or not user.active_unit_id:
+                return {"error": "No active unit selected"}, 400
+            
+            active_unit_id = user.active_unit_id
+            
             # Top Bairros por preço médio do m² (Venda)
             top_neighborhoods_sale = db.session.query(
                 Evaluation.neighborhood,
                 Evaluation.city,
                 func.avg(Evaluation.region_value_sqm).label('avg_price')
             ).filter(
+                Evaluation.unit_id == active_unit_id,
                 (Evaluation.classification.ilike('%venda%') | Evaluation.classification.ilike('%sale%')),
                 Evaluation.neighborhood.isnot(None),
                 Evaluation.region_value_sqm.isnot(None),
@@ -42,6 +53,7 @@ class DashboardController:
                 Evaluation.city,
                 func.avg(Evaluation.region_value_sqm).label('avg_price')
             ).filter(
+                Evaluation.unit_id == active_unit_id,
                 (Evaluation.classification.ilike('%aluguel%') | Evaluation.classification.ilike('%rent%')),
                 Evaluation.neighborhood.isnot(None),
                 Evaluation.region_value_sqm.isnot(None),
@@ -58,6 +70,7 @@ class DashboardController:
                 func.avg(Evaluation.region_value_sqm).label('avg_price'),
                 func.count(Evaluation.id).label('count')
             ).filter(
+                Evaluation.unit_id == active_unit_id,
                 (Evaluation.classification.ilike('%venda%') | Evaluation.classification.ilike('%sale%')),
                 Evaluation.city.isnot(None),
                 Evaluation.region_value_sqm.isnot(None),
@@ -72,6 +85,7 @@ class DashboardController:
                 func.avg(Evaluation.region_value_sqm).label('avg_price'),
                 func.count(Evaluation.id).label('count')
             ).filter(
+                Evaluation.unit_id == active_unit_id,
                 (Evaluation.classification.ilike('%aluguel%') | Evaluation.classification.ilike('%rent%')),
                 Evaluation.city.isnot(None),
                 Evaluation.region_value_sqm.isnot(None),
@@ -85,6 +99,7 @@ class DashboardController:
                 Evaluation.property_type,
                 func.count(Evaluation.id).label('count')
             ).filter(
+                Evaluation.unit_id == active_unit_id,
                 Evaluation.property_type.isnot(None)
             ).group_by(Evaluation.property_type).all()
 
@@ -93,6 +108,7 @@ class DashboardController:
                 Evaluation.purpose,
                 func.count(Evaluation.id).label('count')
             ).filter(
+                Evaluation.unit_id == active_unit_id,
                 Evaluation.purpose.isnot(None)
             ).group_by(Evaluation.purpose).all()
 
@@ -101,6 +117,7 @@ class DashboardController:
                 Evaluation.purpose,
                 func.avg(Evaluation.region_value_sqm).label('avg_price')
             ).filter(
+                Evaluation.unit_id == active_unit_id,
                 Evaluation.purpose.isnot(None),
                 Evaluation.region_value_sqm.isnot(None),
                 Evaluation.region_value_sqm > 0,
@@ -113,6 +130,7 @@ class DashboardController:
                 Evaluation.property_type,
                 func.avg(Evaluation.region_value_sqm).label('avg_price')
             ).filter(
+                Evaluation.unit_id == active_unit_id,
                 Evaluation.property_type.isnot(None),
                 Evaluation.region_value_sqm.isnot(None),
                 Evaluation.region_value_sqm > 0,
@@ -126,6 +144,7 @@ class DashboardController:
                 func.avg(Evaluation.region_value_sqm).label('avg_price'),
                 func.count(Evaluation.id).label('count')
             ).filter(
+                Evaluation.unit_id == active_unit_id,
                 Evaluation.bedrooms.isnot(None),
                 Evaluation.region_value_sqm.isnot(None),
                 Evaluation.region_value_sqm > 0,

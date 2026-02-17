@@ -1,5 +1,7 @@
 from flask import jsonify, request
+from flask_jwt_extended import get_jwt_identity
 from app.models.evaluation import Evaluation, BaseListing
+from app.models.user import User
 from app.extensions import db
 from app.services.sse import publish_event
 from datetime import datetime
@@ -65,9 +67,16 @@ def create_evaluation(data=None):
     if data is None:
         data = request.get_json()
     try:
+        # Get user's active unit
+        user_id = get_jwt_identity()
+        user = User.query.get(int(user_id))
+        if not user or not user.active_unit_id:
+            return jsonify({'error': 'No active unit selected'}), 400
+        
         purpose = normalize_purpose(data.get('purpose'))
         property_type = normalize_property_type(data.get('property_type'))
         new_evaluation = Evaluation(
+            unit_id=user.active_unit_id,
             address=data.get('address'),
             neighborhood=data.get('neighborhood'),
             city=data.get('city'),
@@ -100,7 +109,16 @@ def create_evaluation(data=None):
 
 def get_evaluations():
     logger.info("Fetching all evaluations")
-    query = Evaluation.query
+    
+    # Get user's active unit
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+    if not user or not user.active_unit_id:
+        return jsonify({'error': 'No active unit selected'}), 400
+    
+    # Filter by user's active unit
+    query = Evaluation.query.filter(Evaluation.unit_id == user.active_unit_id)
+    
     classification = request.args.get('classification')
     purpose = normalize_purpose(request.args.get('purpose'))
     appraiser_name = request.args.get('appraiser_name')
@@ -184,12 +202,36 @@ def get_evaluations():
 
 def get_evaluation(evaluation_id):
     logger.info(f"Fetching evaluation: {evaluation_id}")
+    
+    # Get user's active unit
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+    if not user or not user.active_unit_id:
+        return jsonify({'error': 'No active unit selected'}), 400
+    
     evaluation = Evaluation.query.get_or_404(evaluation_id)
+    
+    # Check if evaluation belongs to user's active unit
+    if evaluation.unit_id != user.active_unit_id:
+        return jsonify({'error': 'Access denied'}), 403
+    
     return jsonify(evaluation.to_dict(include_listings=True)), 200
 
 def update_evaluation(evaluation_id, data=None):
     logger.info(f"Updating evaluation: {evaluation_id}")
+    
+    # Get user's active unit
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+    if not user or not user.active_unit_id:
+        return jsonify({'error': 'No active unit selected'}), 400
+    
     evaluation = Evaluation.query.get_or_404(evaluation_id)
+    
+    # Check if evaluation belongs to user's active unit
+    if evaluation.unit_id != user.active_unit_id:
+        return jsonify({'error': 'Access denied'}), 403
+    
     if data is None:
         data = request.get_json()
     
@@ -232,7 +274,19 @@ def update_evaluation(evaluation_id, data=None):
 
 def delete_evaluation(evaluation_id):
     logger.info(f"Deleting evaluation: {evaluation_id}")
+    
+    # Get user's active unit
+    user_id = get_jwt_identity()
+    user = User.query.get(int(user_id))
+    if not user or not user.active_unit_id:
+        return jsonify({'error': 'No active unit selected'}), 400
+    
     evaluation = Evaluation.query.get_or_404(evaluation_id)
+    
+    # Check if evaluation belongs to user's active unit
+    if evaluation.unit_id != user.active_unit_id:
+        return jsonify({'error': 'Access denied'}), 403
+    
     try:
         db.session.delete(evaluation)
         db.session.commit()

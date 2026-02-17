@@ -52,6 +52,7 @@ def create_app(config_class=Config):
     from app.routes.main_routes import main_bp
     from app.routes.auth_routes import auth_bp
     from app.routes.admin_routes import admin_bp
+    from app.routes.unit_routes import unit_bp
     from app.routes.evaluation_routes import evaluation_bp
     from app.routes.bot_routes import bot_bp
     from app.routes.conversation_routes import conversation_bp
@@ -60,9 +61,18 @@ def create_app(config_class=Config):
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(unit_bp)
     app.register_blueprint(evaluation_bp)
     app.register_blueprint(bot_bp)
     app.register_blueprint(conversation_bp)
     app.register_blueprint(dashboard_bp)
+    
+    # Serve uploaded files
+    from flask import send_from_directory
+    @app.route('/api/uploads/<path:folder>/<path:filename>')
+    def serve_upload(folder, filename):
+        """Serve uploaded files"""
+        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], folder)
+        return send_from_directory(upload_path, filename)
 
     return app
