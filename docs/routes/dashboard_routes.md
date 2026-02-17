@@ -1,155 +1,191 @@
 # Dashboard Routes
 
-This document describes the API routes for the Dashboard.
+Este documento descreve a API de rotas do Dashboard.
 
-## Authentication
+## Autenticação
 
-All routes in this module require authentication.
-The API uses **JWT (JSON Web Token)** authentication. You must include the JWT token obtained from the `/auth/login` endpoint in the `Authorization` header of your requests.
+Todas as rotas neste módulo requerem autenticação.
+A API usa autenticação **JWT (JSON Web Token)**. Você deve incluir o token JWT obtido do endpoint `/auth/login` no cabeçalho `Authorization` de suas requisições.
 
-*   **Auth Required:** Yes
-*   **Auth Type:** Bearer Token
-*   **Header:** `Authorization: Bearer <your_access_token>`
+*   **Autenticação Obrigatória:** Sim
+*   **Tipo de Autenticação:** Bearer Token
+*   **Header:** `Authorization: Bearer <seu_access_token>`
 
-## Get Summary Statistics
+## Obter Estatísticas do Dashboard
 
-Retrieves high-level summary statistics for the dashboard.
+Retorna todas as estatísticas consolidadas do dashboard em uma única requisição.
 
-*   **URL:** `/api/dashboard/summary`
-*   **Method:** `GET`
-*   **Auth Required:** Yes
-*   **Success Response:**
-    *   **Code:** 200
-    *   **Content:**
-        ```json
-        {
-            "total_evaluations": 150,
-            "total_users": 25,
-            "total_conversations": 42,
-            "average_price_sqm": 5432.10
-        }
-        ```
-*   **Error Response:**
-    *   **Code:** 500
-    *   **Content:** `{"error": "Error message description"}`
+*   **URL:** `/api/dashboard/stats`
+*   **Método:** `GET`
+*   **Autenticação Obrigatória:** Sim
 
-## Get Charts Data
+### Resposta de Sucesso
 
-Retrieves aggregated data suitable for rendering charts (e.g., evaluations by city, property type, purpose).
-
-*   **URL:** `/api/dashboard/charts`
-*   **Method:** `GET`
-*   **Auth Required:** Yes
-*   **Success Response:**
-    *   **Code:** 200
-    *   **Content:**
-        ```json
-        {
-            "evaluations_by_city": {
-                "São Paulo": 120,
-                "Rio de Janeiro": 30
-            },
-            "evaluations_by_type": {
-                "Apartamento": 100,
-                "Casa": 50
-            },
-            "evaluations_by_purpose": {
-                "Residencial": 140,
-                "Comercial": 10
-            }
-        }
-        ```
-*   **Error Response:**
-    *   **Code:** 500
-    *   **Content:** `{"error": "Error message description"}`
-
-## Get Evaluation Trends
-
-Retrieves evaluation trends over time (count and average price/sqm).
-
-*   **URL:** `/api/dashboard/trends`
-*   **Method:** `GET`
-*   **Auth Required:** Yes
-*   **Success Response:**
-    *   **Code:** 200
-    *   **Content:**
-        ```json
-        {
-            "trends": [
+*   **Código:** 200
+*   **Conteúdo:**
+    ```json
+    {
+        "top_neighborhoods": {
+            "sale": [
                 {
-                    "date": "2023-10-01",
-                    "count": 5,
-                    "avg_sqm": 5000.00
+                    "neighborhood": "Jardins",
+                    "city": "São Paulo",
+                    "avg_price_sqm": 12500.50
                 },
-                ...
-            ]
-        }
-        ```
-
-## Get Price Distribution
-
-Retrieves price distribution data for histograms.
-
-*   **URL:** `/api/dashboard/distribution`
-*   **Method:** `GET`
-*   **Auth Required:** Yes
-*   **Success Response:**
-    *   **Code:** 200
-    *   **Content:**
-        ```json
-        {
-            "distribution": {
-                "0-1000": 5,
-                "1000-2000": 15,
-                ...
-            }
-        }
-        ```
-
-## Get Geographic Statistics
-
-Retrieves top cities and neighborhoods by average price.
-
-*   **URL:** `/api/dashboard/geographic`
-*   **Method:** `GET`
-*   **Auth Required:** Yes
-*   **Success Response:**
-    *   **Code:** 200
-    *   **Content:**
-        ```json
-        {
-            "top_cities_by_price": [
-                {"city": "São Paulo", "avg_price": 6000.00},
-                ...
+                {
+                    "neighborhood": "Leblon",
+                    "city": "Rio de Janeiro",
+                    "avg_price_sqm": 11800.00
+                }
             ],
-            "top_neighborhoods_by_price": [
-                {"neighborhood": "Vila Mariana", "city": "São Paulo", "avg_price": 7000.00},
-                ...
+            "rent": [
+                {
+                    "neighborhood": "Vila Mariana",
+                    "city": "São Paulo",
+                    "avg_price_sqm": 85.30
+                },
+                {
+                    "neighborhood": "Botafogo",
+                    "city": "Rio de Janeiro",
+                    "avg_price_sqm": 75.00
+                }
             ]
-        }
-        ```
-
-## Get Property Features Statistics
-
-Retrieves statistics based on property features (bedrooms, parking).
-
-*   **URL:** `/api/dashboard/features`
-*   **Method:** `GET`
-*   **Auth Required:** Yes
-*   **Success Response:**
-    *   **Code:** 200
-    *   **Content:**
-        ```json
-        {
-            "price_by_bedrooms": {
-                "1": 5000.00,
-                "2": 5500.00,
-                ...
+        },
+        "top_cities": {
+            "sale": [
+                {
+                    "city": "São Paulo",
+                    "avg_price_sqm": 8500.00,
+                    "count": 150
+                },
+                {
+                    "city": "Rio de Janeiro",
+                    "avg_price_sqm": 7800.00,
+                    "count": 80
+                }
+            ],
+            "rent": [
+                {
+                    "city": "São Paulo",
+                    "avg_price_sqm": 65.00,
+                    "count": 200
+                },
+                {
+                    "city": "Rio de Janeiro",
+                    "avg_price_sqm": 58.00,
+                    "count": 120
+                }
+            ]
+        },
+        "evaluations_by_type": {
+            "Apartamento": 250,
+            "Casa": 120,
+            "Cobertura": 30,
+            "Kitnet": 15
+        },
+        "evaluations_by_purpose": {
+            "Residencial": 350,
+            "Comercial": 65
+        },
+        "avg_price_sqm_by_purpose": {
+            "Residencial": 7500.50,
+            "Comercial": 9200.00
+        },
+        "avg_price_sqm_by_type": {
+            "Apartamento": 8000.00,
+            "Casa": 7200.00,
+            "Cobertura": 12000.00,
+            "Kitnet": 5500.00
+        },
+        "avg_price_sqm_by_bedrooms": [
+            {
+                "bedrooms": 1,
+                "avg_price_sqm": 6500.00,
+                "count": 80
             },
-            "price_by_parking": {
-                "0": 4500.00,
-                "1": 5200.00,
-                ...
+            {
+                "bedrooms": 2,
+                "avg_price_sqm": 7200.00,
+                "count": 150
+            },
+            {
+                "bedrooms": 3,
+                "avg_price_sqm": 8000.00,
+                "count": 120
+            },
+            {
+                "bedrooms": 4,
+                "avg_price_sqm": 9500.00,
+                "count": 45
             }
-        }
-        ```
+        ]
+    }
+    ```
+
+### Detalhamento dos Dados Retornados
+
+#### top_neighborhoods
+Top 10 bairros por preço médio do m², separados por:
+- **sale**: Bairros com maiores preços médios de venda
+- **rent**: Bairros com maiores preços médios de aluguel
+
+Cada item contém:
+- `neighborhood`: Nome do bairro
+- `city`: Nome da cidade
+- `avg_price_sqm`: Preço médio do m² no bairro
+
+#### top_cities  
+Top 10 cidades por preço médio do m², separadas por:
+- **sale**: Cidades com maiores preços médios de venda
+- **rent**: Cidades com maiores preços médios de aluguel
+
+Cada item contém:
+- `city`: Nome da cidade
+- `avg_price_sqm`: Preço médio do m² na cidade
+- `count`: Número de avaliações na cidade
+
+#### evaluations_by_type
+Número total de avaliações agrupadas por tipo de imóvel:
+- Apartamento
+- Casa
+- Cobertura
+- Kitnet
+- Outros tipos
+
+#### evaluations_by_purpose
+Número total de avaliações agrupadas por finalidade:
+- **Residencial**: Imóveis residenciais
+- **Comercial**: Imóveis comerciais
+
+#### avg_price_sqm_by_purpose
+Preço médio do m² agrupado por finalidade (Residencial vs Comercial)
+
+#### avg_price_sqm_by_type
+Preço médio do m² agrupado por tipo de imóvel
+
+#### avg_price_sqm_by_bedrooms
+Lista com preço médio do m² agrupado por número de quartos, ordenada crescente:
+
+Cada item contém:
+- `bedrooms`: Número de quartos
+- `avg_price_sqm`: Preço médio do m² para imóveis com esse número de quartos
+- `count`: Quantidade de avaliações com esse número de quartos
+
+### Resposta de Erro
+
+*   **Código:** 500
+*   **Conteúdo:** `{"error": "Descrição da mensagem de erro"}`
+
+### Exemplo de Requisição
+
+```bash
+curl -X GET https://api.exemplo.com/api/dashboard/stats \
+  -H "Authorization: Bearer seu_token_jwt_aqui"
+```
+
+### Observações
+
+- Todos os valores de preço são arredondados para 2 casas decimais
+- Quando não há dados suficientes para calcular médias, o valor retornado é `0`
+- A classificação de venda/aluguel é feita buscando por palavras-chave: "venda"/"sale" para vendas e "aluguel"/"rent" para aluguéis
+- Apenas avaliações com dados válidos (não nulos) são consideradas nos cálculos
