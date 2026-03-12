@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
-from flask import Flask
+from flask import Flask, abort
 from flask_cors import CORS
 from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity
 from config import Config
@@ -66,13 +66,32 @@ def create_app(config_class=Config):
     app.register_blueprint(bot_bp)
     app.register_blueprint(conversation_bp)
     app.register_blueprint(dashboard_bp)
+
+    configured_upload_root = os.path.abspath(app.config['UPLOAD_FOLDER'])
+    local_upload_root = os.path.abspath(os.path.join(app.root_path, '..', 'uploads'))
     
     # Serve uploaded files
     from flask import send_from_directory
     @app.route('/api/uploads/<path:folder>/<path:filename>')
     def serve_upload(folder, filename):
         """Serve uploaded files"""
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], folder)
-        return send_from_directory(upload_path, filename)
+        # Support configured shared storage and local fallback for legacy files.
+        candidate_roots = [configured_upload_root]
+        if os.path.normcase(local_upload_root) != os.path.normcase(configured_upload_root):
+            candidate_roots.append(local_upload_root)
+
+        for root in candidate_roots:
+            upload_path = os.path.join(root, folder)
+            file_path = os.path.join(upload_path, filename)
+            if os.path.isfile(file_path):
+                return send_from_directory(upload_path, filename)
+
+        app.logger.warning(
+            "Uploaded file not found. folder=%s filename=%s roots=%s",
+            folder,
+            filename,
+            candidate_roots
+        )
+        return abort(404)
 
     return app

@@ -35,6 +35,42 @@ class Evaluation(db.Model):
     # Relationship with Conversation
     conversations = db.relationship('Conversation', backref='evaluation', lazy=True, cascade="all, delete-orphan")
 
+    def _is_sale_classification(self):
+        classification_lower = (self.classification or "").strip().lower()
+        if not classification_lower:
+            # Keep backend aligned with frontend default: empty classification means sale.
+            return True
+        if "aluguel" in classification_lower or "rent" in classification_lower:
+            return False
+        return "venda" in classification_lower or "sale" in classification_lower
+
+    def _get_price_after_depreciation(self, estimated_price=None):
+        if estimated_price is None:
+            estimated_price = self.estimated_price
+
+        try:
+            base_price = float(estimated_price or 0.0)
+        except (TypeError, ValueError):
+            base_price = 0.0
+
+        try:
+            depreciation = float(self.depreciation or 0.0)
+        except (TypeError, ValueError):
+            depreciation = 0.0
+
+        depreciation = max(0.0, min(depreciation, 100.0))
+        return base_price * (1 - depreciation / 100)
+
+    def calculate_rounded_price(self, estimated_price=None):
+        """Calculates rounded price using current classification and depreciation."""
+        price_after_depreciation = self._get_price_after_depreciation(estimated_price)
+        if self._is_sale_classification():
+            return round(price_after_depreciation / 10000) * 10000
+        return round(price_after_depreciation / 10) * 10
+
+    def recalculate_rounded_price(self):
+        self.rounded_price = self.calculate_rounded_price(self.estimated_price)
+
     def recalculate_metrics(self):
         """
         Recalculates region_value_sqm, estimated_price, rounded_price, and analyzed_properties_count
@@ -66,17 +102,7 @@ class Evaluation(db.Model):
             
         if self.area:
             self.estimated_price = self.area * self.region_value_sqm
-            
-            # Apply depreciation to estimated price before rounding
-            price_after_depreciation = self.estimated_price
-            if self.depreciation and self.depreciation > 0:
-                price_after_depreciation = self.estimated_price * (1 - self.depreciation / 100)
-            
-            classification_lower = (self.classification or "").lower()
-            if "venda" in classification_lower or "sale" in classification_lower:
-                self.rounded_price = round(price_after_depreciation / 10000) * 10000
-            else:
-                self.rounded_price = round(price_after_depreciation / 10) * 10
+            self.recalculate_rounded_price()
         else:
             self.estimated_price = 0.0
             self.rounded_price = 0.0

@@ -16,7 +16,11 @@ class Config:
     DEBUG = True
     FRONTEND_URL = os.environ.get('FRONTEND_URL')
     # Upload configuration
-    UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'uploads'
+    )
     UNIT_LOGO_FOLDER = os.path.join(UPLOAD_FOLDER, 'unit_logos')
+    UPLOAD_PUBLIC_BASE_URL = (os.environ.get('UPLOAD_PUBLIC_BASE_URL') or '').rstrip('/')
     MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5MB max file size
     ALLOWED_LOGO_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}

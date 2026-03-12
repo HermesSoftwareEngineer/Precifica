@@ -513,7 +513,13 @@ def upload_unit_logo(unit_id):
     Only accessible by admins/managers of the unit.
     """
     from flask import request
-    from app.utils.file_upload import save_logo, delete_logo, get_logo_url
+    from app.utils.file_upload import (
+        save_logo,
+        delete_logo,
+        get_logo_url,
+        is_logo_url_local,
+        extract_logo_filename,
+    )
     
     # Get current user
     current_user_id = get_jwt_identity()
@@ -543,11 +549,9 @@ def upload_unit_logo(unit_id):
     
     try:
         # Delete old logo if exists
-        if unit.logo_url:
-            # Extract filename from URL if it's a local file
-            if unit.logo_url.startswith('/api/uploads/'):
-                old_filename = unit.logo_url.split('/')[-1]
-                delete_logo(old_filename)
+        if unit.logo_url and is_logo_url_local(unit.logo_url):
+            old_filename = extract_logo_filename(unit.logo_url)
+            delete_logo(old_filename)
         
         # Save new logo
         success, result = save_logo(file, unit_id)
@@ -576,7 +580,7 @@ def delete_unit_logo(unit_id):
     Delete the logo of a unit.
     Only accessible by admins/managers of the unit.
     """
-    from app.utils.file_upload import delete_logo
+    from app.utils.file_upload import delete_logo, is_logo_url_local, extract_logo_filename
     
     # Get current user
     current_user_id = get_jwt_identity()
@@ -600,8 +604,8 @@ def delete_unit_logo(unit_id):
     
     try:
         # Delete logo file if it's a local file
-        if unit.logo_url and unit.logo_url.startswith('/api/uploads/'):
-            filename = unit.logo_url.split('/')[-1]
+        if unit.logo_url and is_logo_url_local(unit.logo_url):
+            filename = extract_logo_filename(unit.logo_url)
             delete_logo(filename)
         
         # Clear logo_url in database

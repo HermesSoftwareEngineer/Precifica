@@ -2,7 +2,8 @@ from flask import Blueprint, request, jsonify, Response, stream_with_context
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app.controllers.evaluation_controller import (
     create_evaluation, get_evaluations, get_evaluation, update_evaluation, delete_evaluation,
-    create_base_listing, get_base_listings, get_base_listing, update_base_listing, delete_base_listing
+    create_base_listing, get_base_listings, get_base_listing, update_base_listing, delete_base_listing,
+    update_base_listings_bulk
 )
 from app.controllers.bot_controller import run_evaluation_chat, enqueue_evaluation_chat
 from app.services.sse import register_listener, remove_listener, publish_event, format_sse
@@ -274,6 +275,16 @@ def update_base_listing_route(listing_id):
     if error:
         return error
     return update_base_listing(listing_id)
+
+
+@evaluation_bp.route('/<int:evaluation_id>/listings/bulk', methods=['PUT'])
+@jwt_required()
+def update_base_listings_bulk_route(evaluation_id):
+    logger.info(f"Bulk update base listings route accessed for evaluation: {evaluation_id}")
+    user, error = get_user_with_active_unit()
+    if error:
+        return error
+    return update_base_listings_bulk(evaluation_id)
 
 @evaluation_bp.route('/listings/<int:listing_id>', methods=['DELETE'])
 @jwt_required()

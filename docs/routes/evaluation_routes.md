@@ -453,6 +453,85 @@ Existing samples are marked active by default.
   ```
 - **Response:** JSON object of the updated listing. Triggers SSE event `listing_updated` on channel `evaluation:{evaluation_id}`.
 
+## 9.1 Bulk Update Base Listings (Preview or Persist)
+- **URL:** `/<evaluation_id>/listings/bulk`
+- **Method:** `PUT`
+- **Description:** Updates multiple listings in one request. Supports two modes:
+  - **Preview mode (`persist: false`)**: does not save to database, returns recalculated evaluation metrics for instant frontend visualization.
+  - **Persist mode (`persist: true`)**: saves all updates to database in one transaction and emits SSE event `listings_bulk_updated`.
+- **Body:**
+  ```json
+  {
+    "persist": false,
+    "updates": [
+      {
+        "id": 101,
+        "is_active": false,
+        "deactivation_reason": "Outlier - area muito diferente"
+      },
+      {
+        "id": 102,
+        "is_active": true,
+        "deactivation_reason": null
+      }
+    ]
+  }
+  ```
+- **Response (Preview):**
+  ```json
+  {
+    "persisted": false,
+    "updated_listings": [
+      {
+        "id": 101,
+        "is_active": false,
+        "deactivation_reason": "Outlier - area muito diferente"
+      }
+    ],
+    "evaluation": {
+      "id": 1,
+      "region_value_sqm": 5321.44,
+      "estimated_price": 480000.0,
+      "rounded_price": 480000.0,
+      "analyzed_properties_count": 12,
+      "active_listings_count": 12,
+      "inactive_listings_count": 3,
+      "total_listings_count": 15
+    }
+  }
+  ```
+- **Response (Persist):**
+  ```json
+  {
+    "persisted": true,
+    "updated_listings": [
+      {
+        "id": 101,
+        "is_active": false,
+        "deactivation_reason": "Outlier - area muito diferente"
+      },
+      {
+        "id": 102,
+        "is_active": true,
+        "deactivation_reason": null
+      }
+    ],
+    "evaluation": {
+      "id": 1,
+      "region_value_sqm": 5321.44,
+      "estimated_price": 480000.0,
+      "rounded_price": 480000.0,
+      "analyzed_properties_count": 12,
+      "active_listings_count": 12,
+      "inactive_listings_count": 3,
+      "total_listings_count": 15
+    }
+  }
+  ```
+- **SSE Event on Persist:**
+  - **Event:** `listings_bulk_updated`
+  - **Channel:** `evaluation:{evaluation_id}`
+
 ## 10. Delete Base Listing (Direct)
 - **URL:** `/listings/<listing_id>`
 - **Method:** `DELETE`

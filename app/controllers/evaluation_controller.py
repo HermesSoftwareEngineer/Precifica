@@ -2,12 +2,28 @@ from flask import jsonify, request
 from flask_jwt_extended import get_jwt_identity
 from app.models.evaluation import Evaluation, BaseListing
 from app.models.user import User
-from app.extensions import db
+from app.extensions import db, bot_user_id_var
 from app.services.sse import publish_event
 from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _get_current_user_id():
+    """Return the current user_id from the JWT token or the bot context variable.
+
+    Controller functions may be called from two contexts:
+    1. A normal HTTP request decorated with @jwt_required() — get_jwt_identity() works.
+    2. A bot background thread (no request context) — fall back to bot_user_id_var.
+    """
+    try:
+        user_id = get_jwt_identity()
+        if user_id is not None:
+            return int(user_id)
+    except Exception:
+        pass
+    return bot_user_id_var.get()
 
 def normalize_purpose(value):
     if value is None:
@@ -60,6 +76,80 @@ def normalize_property_type(value):
 
     return normalized
 
+
+def normalize_classification(value):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        value = str(value)
+
+    normalized = value.strip()
+    lowered = normalized.lower()
+
+    if lowered in ("", "none", "null"):
+        return "sale"
+    if "venda" in lowered or "sale" in lowered:
+        return "sale"
+    if "aluguel" in lowered or "rent" in lowered:
+        return "rent"
+
+    return normalized
+
+
+def _calculate_evaluation_metrics_for_states(evaluation, listings_state):
+    """
+    Calculate evaluation metrics using a custom active/inactive state map.
+    This is used for preview mode (without persisting to the database).
+    """
+    listings = [
+        listing
+        for listing in evaluation.base_listings
+        if listings_state.get(listing.id, {}).get('is_active', listing.is_active)
+    ]
+
+    analyzed_properties_count = len(listings)
+    total_sqm_value = 0.0
+    valid_listings_count = 0
+
+    for listing in listings:
+        if listing.rent_value and listing.area and listing.area > 0:
+            sqm_value = listing.rent_value / listing.area
+            total_sqm_value += sqm_value
+            valid_listings_count += 1
+
+    region_value_sqm = (total_sqm_value / valid_listings_count) if valid_listings_count > 0 else 0.0
+
+    if evaluation.area:
+        estimated_price = evaluation.area * region_value_sqm
+        rounded_price = evaluation.calculate_rounded_price(estimated_price)
+    else:
+        estimated_price = 0.0
+        rounded_price = 0.0
+
+    total_listings_count = len(evaluation.base_listings)
+    active_listings_count = analyzed_properties_count
+    inactive_listings_count = total_listings_count - active_listings_count
+
+    return {
+        'region_value_sqm': region_value_sqm,
+        'estimated_price': estimated_price,
+        'rounded_price': rounded_price,
+        'analyzed_properties_count': analyzed_properties_count,
+        'active_listings_count': active_listings_count,
+        'inactive_listings_count': inactive_listings_count,
+        'total_listings_count': total_listings_count
+    }
+
+
+def _build_listing_state_map(evaluation):
+    return {
+        listing.id: {
+            'is_active': listing.is_active,
+            'deactivation_reason': listing.deactivation_reason
+        }
+        for listing in evaluation.base_listings
+    }
+
 # --- Evaluation CRUD ---
 
 def create_evaluation(data=None):
@@ -68,13 +158,16 @@ def create_evaluation(data=None):
         data = request.get_json()
     try:
         # Get user's active unit
-        user_id = get_jwt_identity()
-        user = User.query.get(int(user_id))
+        user_id = _get_current_user_id()
+        if user_id is None:
+            return jsonify({'error': 'Authentication required'}), 401
+        user = User.query.get(user_id)
         if not user or not user.active_unit_id:
             return jsonify({'error': 'No active unit selected'}), 400
         
         purpose = normalize_purpose(data.get('purpose'))
         property_type = normalize_property_type(data.get('property_type'))
+        classification = normalize_classification(data.get('classification'))
         new_evaluation = Evaluation(
             unit_id=user.active_unit_id,
             address=data.get('address'),
@@ -87,9 +180,9 @@ def create_evaluation(data=None):
             owner_name=data.get('owner_name'),
             appraiser_name=data.get('appraiser_name'),
             estimated_price=data.get('estimated_price'),
-            rounded_price=data.get('rounded_price'),
+            rounded_price=None,
             description=data.get('description'),
-            classification=data.get('classification'),
+            classification=classification,
             purpose=purpose,
             property_type=property_type,
             bedrooms=data.get('bedrooms', 0),
@@ -98,6 +191,12 @@ def create_evaluation(data=None):
             analyzed_properties_count=data.get('analyzed_properties_count', 0),
             depreciation=data.get('depreciation', 0.0)
         )
+
+        if new_evaluation.estimated_price is None and new_evaluation.area and new_evaluation.region_value_sqm:
+            new_evaluation.estimated_price = new_evaluation.area * new_evaluation.region_value_sqm
+
+        new_evaluation.recalculate_rounded_price()
+
         db.session.add(new_evaluation)
         db.session.commit()
         logger.info(f"Evaluation created successfully: {new_evaluation.id}")
@@ -111,8 +210,10 @@ def get_evaluations():
     logger.info("Fetching all evaluations")
     
     # Get user's active unit
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
+    user_id = _get_current_user_id()
+    if user_id is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    user = User.query.get(user_id)
     if not user or not user.active_unit_id:
         return jsonify({'error': 'No active unit selected'}), 400
     
@@ -204,8 +305,10 @@ def get_evaluation(evaluation_id):
     logger.info(f"Fetching evaluation: {evaluation_id}")
     
     # Get user's active unit
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
+    user_id = _get_current_user_id()
+    if user_id is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    user = User.query.get(user_id)
     if not user or not user.active_unit_id:
         return jsonify({'error': 'No active unit selected'}), 400
     
@@ -221,8 +324,10 @@ def update_evaluation(evaluation_id, data=None):
     logger.info(f"Updating evaluation: {evaluation_id}")
     
     # Get user's active unit
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
+    user_id = _get_current_user_id()
+    if user_id is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    user = User.query.get(user_id)
     if not user or not user.active_unit_id:
         return jsonify({'error': 'No active unit selected'}), 400
     
@@ -238,6 +343,7 @@ def update_evaluation(evaluation_id, data=None):
     try:
         normalized_purpose = normalize_purpose(data.get('purpose')) if 'purpose' in data else None
         normalized_property_type = normalize_property_type(data.get('property_type')) if 'property_type' in data else None
+        normalized_classification = normalize_classification(data.get('classification')) if 'classification' in data else None
         evaluation.address = data.get('address', evaluation.address)
         evaluation.neighborhood = data.get('neighborhood', evaluation.neighborhood)
         evaluation.city = data.get('city', evaluation.city)
@@ -248,9 +354,10 @@ def update_evaluation(evaluation_id, data=None):
         evaluation.owner_name = data.get('owner_name', evaluation.owner_name)
         evaluation.appraiser_name = data.get('appraiser_name', evaluation.appraiser_name)
         evaluation.estimated_price = data.get('estimated_price', evaluation.estimated_price)
-        evaluation.rounded_price = data.get('rounded_price', evaluation.rounded_price)
+        # rounded_price is always server-calculated to keep rules consistent.
         evaluation.description = data.get('description', evaluation.description)
-        evaluation.classification = data.get('classification', evaluation.classification)
+        if 'classification' in data:
+            evaluation.classification = normalized_classification
         if 'purpose' in data:
             evaluation.purpose = normalized_purpose
         if 'property_type' in data:
@@ -260,9 +367,13 @@ def update_evaluation(evaluation_id, data=None):
         evaluation.parking_spaces = data.get('parking_spaces', evaluation.parking_spaces)
         evaluation.analyzed_properties_count = data.get('analyzed_properties_count', evaluation.analyzed_properties_count)
         evaluation.depreciation = data.get('depreciation', evaluation.depreciation)
-        
-        if 'area' in data or 'depreciation' in data:
+
+        should_recalculate_metrics = any(field in data for field in ('area', 'depreciation', 'classification'))
+
+        if should_recalculate_metrics and evaluation.base_listings:
             evaluation.recalculate_metrics()
+        else:
+            evaluation.recalculate_rounded_price()
 
         db.session.commit()
         logger.info(f"Evaluation {evaluation_id} updated successfully")
@@ -276,8 +387,10 @@ def delete_evaluation(evaluation_id):
     logger.info(f"Deleting evaluation: {evaluation_id}")
     
     # Get user's active unit
-    user_id = get_jwt_identity()
-    user = User.query.get(int(user_id))
+    user_id = _get_current_user_id()
+    if user_id is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    user = User.query.get(user_id)
     if not user or not user.active_unit_id:
         return jsonify({'error': 'No active unit selected'}), 400
     
@@ -417,6 +530,136 @@ def update_base_listing(listing_id, data=None):
             )
         
         return jsonify(listing.to_dict()), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 400
+
+
+def update_base_listings_bulk(evaluation_id, data=None):
+    """
+    Bulk update listing activation states for one evaluation.
+    - persist=True: writes changes to DB and emits SSE event.
+    - persist=False: returns preview-only metrics and listing states.
+    """
+    logger.info(f"Bulk updating base listings for evaluation: {evaluation_id}")
+
+    user_id = _get_current_user_id()
+    if user_id is None:
+        return jsonify({'error': 'Authentication required'}), 401
+    user = User.query.get(user_id)
+    if not user or not user.active_unit_id:
+        return jsonify({'error': 'No active unit selected'}), 400
+
+    evaluation = Evaluation.query.get_or_404(evaluation_id)
+    if evaluation.unit_id != user.active_unit_id:
+        return jsonify({'error': 'Access denied'}), 403
+
+    if data is None:
+        data = request.get_json(silent=True) or {}
+
+    if not isinstance(data, dict):
+        return jsonify({'error': 'Request body must be a JSON object'}), 400
+
+    updates = data.get('updates')
+    if updates is None:
+        # Backward compatibility with previous frontend payload keys.
+        legacy_updates = data.get('listings')
+        if legacy_updates is None:
+            legacy_updates = data.get('base_listings')
+        if isinstance(legacy_updates, list):
+            updates = legacy_updates
+
+    persist = data.get('persist')
+    if persist is None:
+        persist_arg = request.args.get('persist')
+        if persist_arg is None:
+            persist = True
+        else:
+            normalized_persist = str(persist_arg).strip().lower()
+            if normalized_persist in ('true', '1', 'yes', 'on'):
+                persist = True
+            elif normalized_persist in ('false', '0', 'no', 'off'):
+                persist = False
+            else:
+                return jsonify({'error': 'persist must be a boolean'}), 400
+
+    if not isinstance(persist, bool):
+        return jsonify({'error': 'persist must be a boolean'}), 400
+
+    if not isinstance(updates, list) or len(updates) == 0:
+        return jsonify({'error': 'updates must be a non-empty list'}), 400
+
+    listings_by_id = {listing.id: listing for listing in evaluation.base_listings}
+    state_map = _build_listing_state_map(evaluation)
+    touched_listing_ids = []
+
+    for update in updates:
+        if not isinstance(update, dict):
+            return jsonify({'error': 'Each update must be an object'}), 400
+
+        listing_id = update.get('id')
+        if isinstance(listing_id, str) and listing_id.isdigit():
+            listing_id = int(listing_id)
+
+        if not isinstance(listing_id, int):
+            return jsonify({'error': 'Each update must include integer field id'}), 400
+
+        if listing_id not in listings_by_id:
+            return jsonify({'error': f'Listing {listing_id} does not belong to evaluation {evaluation_id}'}), 404
+
+        if 'is_active' in update and not isinstance(update.get('is_active'), bool):
+            return jsonify({'error': f'is_active for listing {listing_id} must be a boolean'}), 400
+
+        if listing_id not in touched_listing_ids:
+            touched_listing_ids.append(listing_id)
+
+        current_state = state_map[listing_id]
+        if 'is_active' in update:
+            current_state['is_active'] = update.get('is_active')
+        if 'deactivation_reason' in update:
+            current_state['deactivation_reason'] = update.get('deactivation_reason')
+
+        if persist:
+            listing = listings_by_id[listing_id]
+            if 'is_active' in update:
+                listing.is_active = update.get('is_active')
+            if 'deactivation_reason' in update:
+                listing.deactivation_reason = update.get('deactivation_reason')
+
+    try:
+        if persist:
+            evaluation.recalculate_metrics()
+            db.session.commit()
+
+            refreshed_evaluation = Evaluation.query.get(evaluation_id)
+            payload = {
+                'persisted': True,
+                'updated_listings': [listings_by_id[listing_id].to_dict() for listing_id in touched_listing_ids],
+                'evaluation': refreshed_evaluation.to_dict() if refreshed_evaluation else evaluation.to_dict()
+            }
+
+            publish_event(
+                f"evaluation:{evaluation_id}",
+                "listings_bulk_updated",
+                payload
+            )
+            return jsonify(payload), 200
+
+        evaluation_preview = evaluation.to_dict()
+        evaluation_preview.update(_calculate_evaluation_metrics_for_states(evaluation, state_map))
+
+        preview_listings = []
+        for listing_id in touched_listing_ids:
+            listing_dict = listings_by_id[listing_id].to_dict()
+            listing_dict['is_active'] = state_map[listing_id]['is_active']
+            listing_dict['deactivation_reason'] = state_map[listing_id]['deactivation_reason']
+            preview_listings.append(listing_dict)
+
+        return jsonify({
+            'persisted': False,
+            'updated_listings': preview_listings,
+            'evaluation': evaluation_preview
+        }), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
