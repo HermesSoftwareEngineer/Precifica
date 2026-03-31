@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Flask, abort
 from flask_cors import CORS
 from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity
+from werkzeug.utils import safe_join
 from config import Config
 from app.extensions import db, bcrypt, login_manager, cors, jwt
 
@@ -69,6 +70,9 @@ def create_app(config_class=Config):
 
     configured_upload_root = os.path.abspath(app.config['UPLOAD_FOLDER'])
     local_upload_root = os.path.abspath(os.path.join(app.root_path, '..', 'uploads'))
+
+    os.makedirs(configured_upload_root, exist_ok=True)
+    os.makedirs(os.path.abspath(app.config['UNIT_LOGO_FOLDER']), exist_ok=True)
     
     # Serve uploaded files
     from flask import send_from_directory
@@ -81,8 +85,12 @@ def create_app(config_class=Config):
             candidate_roots.append(local_upload_root)
 
         for root in candidate_roots:
-            upload_path = os.path.join(root, folder)
-            file_path = os.path.join(upload_path, filename)
+            upload_path = safe_join(root, folder)
+            if not upload_path:
+                continue
+            file_path = safe_join(upload_path, filename)
+            if not file_path:
+                continue
             if os.path.isfile(file_path):
                 return send_from_directory(upload_path, filename)
 

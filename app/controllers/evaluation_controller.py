@@ -150,6 +150,32 @@ def _build_listing_state_map(evaluation):
         for listing in evaluation.base_listings
     }
 
+
+def _get_current_user_with_active_unit():
+    user_id = _get_current_user_id()
+    if user_id is None:
+        return None, (jsonify({'error': 'Authentication required'}), 401)
+
+    user = User.query.get(user_id)
+    if not user or not user.active_unit_id:
+        return None, (jsonify({'error': 'No active unit selected'}), 400)
+
+    return user, None
+
+
+def _get_evaluation_for_user_or_error(evaluation_id, user):
+    evaluation = Evaluation.query.get_or_404(evaluation_id)
+    if evaluation.unit_id != user.active_unit_id:
+        return None, (jsonify({'error': 'Access denied'}), 403)
+    return evaluation, None
+
+
+def _get_listing_for_user_or_error(listing_id, user):
+    listing = BaseListing.query.get_or_404(listing_id)
+    if not listing.evaluation or listing.evaluation.unit_id != user.active_unit_id:
+        return None, (jsonify({'error': 'Access denied'}), 403)
+    return listing, None
+
 # --- Evaluation CRUD ---
 
 def create_evaluation(data=None):
@@ -414,8 +440,14 @@ def delete_evaluation(evaluation_id):
 
 def create_base_listing(evaluation_id, data=None):
     logger.info(f"Creating base listing for evaluation: {evaluation_id}")
-    # Ensure evaluation exists
-    evaluation = Evaluation.query.get_or_404(evaluation_id)
+    user, error = _get_current_user_with_active_unit()
+    if error:
+        return error
+
+    evaluation, error = _get_evaluation_for_user_or_error(evaluation_id, user)
+    if error:
+        return error
+
     if data is None:
         data = request.get_json()
     
@@ -468,15 +500,36 @@ def create_base_listing(evaluation_id, data=None):
         return jsonify({'error': str(e)}), 400
 
 def get_base_listings(evaluation_id):
-    Evaluation.query.get_or_404(evaluation_id)
+    user, error = _get_current_user_with_active_unit()
+    if error:
+        return error
+
+    evaluation, error = _get_evaluation_for_user_or_error(evaluation_id, user)
+    if error:
+        return error
+
     listings = BaseListing.query.filter_by(evaluation_id=evaluation_id).all()
     return jsonify([l.to_dict() for l in listings]), 200
 
 def get_base_listing(listing_id):
-    listing = BaseListing.query.get_or_404(listing_id)
+    user, error = _get_current_user_with_active_unit()
+    if error:
+        return error
+
+    listing, error = _get_listing_for_user_or_error(listing_id, user)
+    if error:
+        return error
+
     return jsonify(listing.to_dict()), 200
 def update_base_listing(listing_id, data=None):
-    listing = BaseListing.query.get_or_404(listing_id)
+    user, error = _get_current_user_with_active_unit()
+    if error:
+        return error
+
+    listing, error = _get_listing_for_user_or_error(listing_id, user)
+    if error:
+        return error
+
     if data is None:
         data = request.get_json()
     
@@ -543,16 +596,13 @@ def update_base_listings_bulk(evaluation_id, data=None):
     """
     logger.info(f"Bulk updating base listings for evaluation: {evaluation_id}")
 
-    user_id = _get_current_user_id()
-    if user_id is None:
-        return jsonify({'error': 'Authentication required'}), 401
-    user = User.query.get(user_id)
-    if not user or not user.active_unit_id:
-        return jsonify({'error': 'No active unit selected'}), 400
+    user, error = _get_current_user_with_active_unit()
+    if error:
+        return error
 
-    evaluation = Evaluation.query.get_or_404(evaluation_id)
-    if evaluation.unit_id != user.active_unit_id:
-        return jsonify({'error': 'Access denied'}), 403
+    evaluation, error = _get_evaluation_for_user_or_error(evaluation_id, user)
+    if error:
+        return error
 
     if data is None:
         data = request.get_json(silent=True) or {}
@@ -665,7 +715,14 @@ def update_base_listings_bulk(evaluation_id, data=None):
         return jsonify({'error': str(e)}), 400
 
 def delete_base_listing(listing_id):
-    listing = BaseListing.query.get_or_404(listing_id)
+    user, error = _get_current_user_with_active_unit()
+    if error:
+        return error
+
+    listing, error = _get_listing_for_user_or_error(listing_id, user)
+    if error:
+        return error
+
     try:
         evaluation = listing.evaluation
         db.session.delete(listing)

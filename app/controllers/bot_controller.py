@@ -450,7 +450,12 @@ def _prepare_evaluation_conversation(evaluation_id, user_input, force_new_chat=F
             except Exception:
                 user_id = None
 
-        conversation = Conversation(user_id=user_id, title=f"Ajuste Avaliacao #{evaluation_id}", evaluation_id=evaluation_id)
+        conversation = Conversation(
+            user_id=user_id,
+            unit_id=evaluation.unit_id,
+            title=f"Ajuste Avaliacao #{evaluation_id}",
+            evaluation_id=evaluation_id
+        )
         db.session.add(conversation)
         db.session.flush()
 

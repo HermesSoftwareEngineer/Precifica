@@ -1,4 +1,5 @@
 from flask import Blueprint, Response, stream_with_context, jsonify
+from flask_jwt_extended import jwt_required
 from app.controllers.bot_controller import chat, chat_evaluation, chat_async, chat_evaluation_async
 from app.models.chat import Conversation
 from app.services.sse import register_listener, remove_listener, format_sse
@@ -20,11 +21,13 @@ def chat_async_route():
     return chat_async()
 
 @bot_bp.route('/evaluation/<int:evaluation_id>/chat', methods=['POST'])
+@jwt_required()
 def chat_evaluation_route(evaluation_id):
     logger.info(f"Chat evaluation route accessed for evaluation_id: {evaluation_id}")
     return chat_evaluation(evaluation_id)
 
 @bot_bp.route('/evaluation/<int:evaluation_id>/chat/async', methods=['POST'])
+@jwt_required()
 def chat_evaluation_async_route(evaluation_id):
     logger.info(f"Chat evaluation async route accessed for evaluation_id: {evaluation_id}")
     return chat_evaluation_async(evaluation_id)

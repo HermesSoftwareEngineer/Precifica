@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 def create_unit():
     """Create a new unit."""
+    from app.utils.file_upload import prepare_logo_storage_value
+
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
     
@@ -33,7 +35,7 @@ def create_unit():
             whatsapp=data.get('whatsapp'),
             address=data.get('address'),
             cnpj=data.get('cnpj'),
-            logo_url=data.get('logo_url'),
+            logo_url=prepare_logo_storage_value(data.get('logo_url')),
             custom_fields=data.get('custom_fields', {})
         )
         
@@ -93,6 +95,8 @@ def list_user_units():
 
 def update_unit(unit_id):
     """Update a unit (admin/manager only)."""
+    from app.utils.file_upload import prepare_logo_storage_value
+
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
     
@@ -120,7 +124,7 @@ def update_unit(unit_id):
         if 'cnpj' in data:
             unit.cnpj = data['cnpj']
         if 'logo_url' in data:
-            unit.logo_url = data['logo_url']
+            unit.logo_url = prepare_logo_storage_value(data['logo_url'])
         if 'custom_fields' in data:
             unit.custom_fields = data['custom_fields']
         
@@ -516,7 +520,8 @@ def upload_unit_logo(unit_id):
     from app.utils.file_upload import (
         save_logo,
         delete_logo,
-        get_logo_url,
+        resolve_logo_public_url,
+        get_logo_storage_key,
         is_logo_url_local,
         extract_logo_filename,
     )
@@ -559,15 +564,15 @@ def upload_unit_logo(unit_id):
         if not success:
             return jsonify({"error": result}), 400
         
-        # Update unit with new logo URL
-        unit.logo_url = get_logo_url(result)
+        # Persist only storage key for portability across domains/environments
+        unit.logo_url = get_logo_storage_key(result)
         db.session.commit()
         
         logger.info(f"Logo uploaded for unit {unit.name} (ID: {unit_id})")
         
         return jsonify({
             "message": "Logo uploaded successfully",
-            "logo_url": unit.logo_url
+            "logo_url": resolve_logo_public_url(unit.logo_url)
         }), 200
         
     except Exception as e:
