@@ -12,18 +12,23 @@ from typing import List, Dict, Any
 from app.bot.customTypes import SalvarAvaliacaoInput
 from app.services.ai_cancel import is_evaluation_canceled
 from app.services.sse import publish_event
-from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from app.extensions import bot_user_id_var
 
 
 def _has_authenticated_tool_context() -> bool:
+    context_user_id = bot_user_id_var.get()
+    if context_user_id is not None:
+        return True
+
     try:
+        verify_jwt_in_request(optional=True)
         user_id = get_jwt_identity()
         if user_id is not None:
             return True
     except Exception:
         pass
-    return bot_user_id_var.get() is not None
+    return False
 
 
 def _require_authenticated_tool_context():

@@ -1,5 +1,5 @@
 from flask import jsonify, request
-from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from app.models.evaluation import Evaluation, BaseListing
 from app.models.user import User
 from app.extensions import db, bot_user_id_var
@@ -17,13 +17,19 @@ def _get_current_user_id():
     1. A normal HTTP request decorated with @jwt_required() — get_jwt_identity() works.
     2. A bot background thread (no request context) — fall back to bot_user_id_var.
     """
+    context_user_id = bot_user_id_var.get()
+    if context_user_id is not None:
+        return int(context_user_id)
+
     try:
+        verify_jwt_in_request(optional=True)
         user_id = get_jwt_identity()
         if user_id is not None:
             return int(user_id)
     except Exception:
         pass
-    return bot_user_id_var.get()
+
+    return None
 
 def normalize_purpose(value):
     if value is None:
