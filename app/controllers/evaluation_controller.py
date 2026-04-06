@@ -102,15 +102,17 @@ def normalize_classification(value):
     return normalized
 
 
-def _calculate_evaluation_metrics_for_states(evaluation, listings_state):
+def _calculate_evaluation_metrics_for_states(evaluation, listings_state, excluded_listing_ids=None):
     """
     Calculate evaluation metrics using a custom active/inactive state map.
     This is used for preview mode (without persisting to the database).
     """
+    excluded_listing_ids = set(excluded_listing_ids or [])
     listings = [
         listing
         for listing in evaluation.base_listings
-        if listings_state.get(listing.id, {}).get('is_active', listing.is_active)
+        if listing.id not in excluded_listing_ids
+        and listings_state.get(listing.id, {}).get('is_active', listing.is_active)
     ]
 
     analyzed_properties_count = len(listings)
@@ -132,7 +134,7 @@ def _calculate_evaluation_metrics_for_states(evaluation, listings_state):
         estimated_price = 0.0
         rounded_price = 0.0
 
-    total_listings_count = len(evaluation.base_listings)
+    total_listings_count = len([listing for listing in evaluation.base_listings if listing.id not in excluded_listing_ids])
     active_listings_count = analyzed_properties_count
     inactive_listings_count = total_listings_count - active_listings_count
 
@@ -642,14 +644,36 @@ def update_base_listings_bulk(evaluation_id, data=None):
     if not isinstance(persist, bool):
         return jsonify({'error': 'persist must be a boolean'}), 400
 
-    if not isinstance(updates, list) or len(updates) == 0:
-        return jsonify({'error': 'updates must be a non-empty list'}), 400
+    deleted_ids = data.get('delete_ids')
+    if deleted_ids is None:
+        deleted_ids = data.get('deleted_ids')
+
+    normalized_deleted_ids = []
+    if deleted_ids is not None:
+        if not isinstance(deleted_ids, list):
+            return jsonify({'error': 'delete_ids must be a list'}), 400
+        for listing_id in deleted_ids:
+            if isinstance(listing_id, str) and listing_id.isdigit():
+                listing_id = int(listing_id)
+            if not isinstance(listing_id, int):
+                return jsonify({'error': 'Each delete_ids entry must be an integer'}), 400
+            if listing_id not in normalized_deleted_ids:
+                normalized_deleted_ids.append(listing_id)
+
+    if (not isinstance(updates, list) or len(updates) == 0) and len(normalized_deleted_ids) == 0:
+        return jsonify({'error': 'updates or delete_ids must be provided'}), 400
 
     listings_by_id = {listing.id: listing for listing in evaluation.base_listings}
     state_map = _build_listing_state_map(evaluation)
     touched_listing_ids = []
 
-    for update in updates:
+    for deleted_id in normalized_deleted_ids:
+        if deleted_id not in listings_by_id:
+            return jsonify({'error': f'Listing {deleted_id} does not belong to evaluation {evaluation_id}'}), 404
+
+    deleted_set = set(normalized_deleted_ids)
+
+    for update in updates or []:
         if not isinstance(update, dict):
             return jsonify({'error': 'Each update must be an object'}), 400
 
@@ -659,6 +683,9 @@ def update_base_listings_bulk(evaluation_id, data=None):
 
         if not isinstance(listing_id, int):
             return jsonify({'error': 'Each update must include integer field id'}), 400
+
+        if listing_id in deleted_set:
+            return jsonify({'error': f'Listing {listing_id} cannot be updated and deleted in the same request'}), 400
 
         if listing_id not in listings_by_id:
             return jsonify({'error': f'Listing {listing_id} does not belong to evaluation {evaluation_id}'}), 404
@@ -682,8 +709,17 @@ def update_base_listings_bulk(evaluation_id, data=None):
             if 'deactivation_reason' in update:
                 listing.deactivation_reason = update.get('deactivation_reason')
 
+    deleted_listing_objects = []
+    if persist and deleted_set:
+        for deleted_id in normalized_deleted_ids:
+            deleted_listing_objects.append(listings_by_id[deleted_id])
+        for listing in deleted_listing_objects:
+            db.session.delete(listing)
+
     try:
         if persist:
+            if deleted_listing_objects:
+                db.session.flush()
             evaluation.recalculate_metrics()
             db.session.commit()
 
@@ -691,6 +727,7 @@ def update_base_listings_bulk(evaluation_id, data=None):
             payload = {
                 'persisted': True,
                 'updated_listings': [listings_by_id[listing_id].to_dict() for listing_id in touched_listing_ids],
+                'deleted_listing_ids': normalized_deleted_ids,
                 'evaluation': refreshed_evaluation.to_dict() if refreshed_evaluation else evaluation.to_dict()
             }
 
@@ -702,7 +739,7 @@ def update_base_listings_bulk(evaluation_id, data=None):
             return jsonify(payload), 200
 
         evaluation_preview = evaluation.to_dict()
-        evaluation_preview.update(_calculate_evaluation_metrics_for_states(evaluation, state_map))
+        evaluation_preview.update(_calculate_evaluation_metrics_for_states(evaluation, state_map, normalized_deleted_ids))
 
         preview_listings = []
         for listing_id in touched_listing_ids:
@@ -714,6 +751,7 @@ def update_base_listings_bulk(evaluation_id, data=None):
         return jsonify({
             'persisted': False,
             'updated_listings': preview_listings,
+            'deleted_listing_ids': normalized_deleted_ids,
             'evaluation': evaluation_preview
         }), 200
     except Exception as e:

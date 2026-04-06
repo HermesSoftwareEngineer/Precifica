@@ -70,9 +70,25 @@ def create_app(config_class=Config):
 
     configured_upload_root = os.path.abspath(app.config['UPLOAD_FOLDER'])
     local_upload_root = os.path.abspath(os.path.join(app.root_path, '..', 'uploads'))
+    configured_unit_logo_root = os.path.abspath(app.config['UNIT_LOGO_FOLDER'])
+    local_unit_logo_root = os.path.abspath(os.path.join(local_upload_root, 'unit_logos'))
 
-    os.makedirs(configured_upload_root, exist_ok=True)
-    os.makedirs(os.path.abspath(app.config['UNIT_LOGO_FOLDER']), exist_ok=True)
+    try:
+        os.makedirs(configured_upload_root, exist_ok=True)
+        os.makedirs(configured_unit_logo_root, exist_ok=True)
+    except OSError as exc:
+        app.logger.warning(
+            "Falha ao usar UPLOAD_FOLDER configurado (%s). Usando fallback local (%s). Erro: %s",
+            configured_upload_root,
+            local_upload_root,
+            exc,
+        )
+        os.makedirs(local_upload_root, exist_ok=True)
+        os.makedirs(local_unit_logo_root, exist_ok=True)
+        app.config['UPLOAD_FOLDER'] = local_upload_root
+        app.config['UNIT_LOGO_FOLDER'] = local_unit_logo_root
+        configured_upload_root = local_upload_root
+        configured_unit_logo_root = local_unit_logo_root
     
     # Serve uploaded files
     from flask import send_from_directory
