@@ -12,32 +12,6 @@ from typing import List, Dict, Any
 from app.bot.customTypes import SalvarAvaliacaoInput
 from app.services.ai_cancel import is_evaluation_canceled
 from app.services.sse import publish_event
-from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
-from app.extensions import bot_user_id_var
-
-
-def _has_authenticated_tool_context() -> bool:
-    context_user_id = bot_user_id_var.get()
-    if context_user_id is not None:
-        return True
-
-    try:
-        verify_jwt_in_request(optional=True)
-        user_id = get_jwt_identity()
-        if user_id is not None:
-            return True
-    except Exception:
-        pass
-    return False
-
-
-def _require_authenticated_tool_context():
-    if _has_authenticated_tool_context():
-        return None
-    return (
-        "Operacao requer autenticacao. "
-        "Faca login para criar, ler ou alterar avaliacoes e imoveis comparativos."
-    )
 
 @tool
 def ler_instrucoes_para_nova_avaliacao():
@@ -207,10 +181,6 @@ def salvar_avaliacao_db(
     - finalidade (str): ex: Residencial
     """
     try:
-        auth_error = _require_authenticated_tool_context()
-        if auth_error:
-            return auth_error
-
         # Create Evaluation
         evaluation_data = {
             "address": endereco,
@@ -291,10 +261,6 @@ def ler_avaliacao(id: int):
     Retorna os dados da avaliação e dos imóveis comparativos usados.
     """
     try:
-        auth_error = _require_authenticated_tool_context()
-        if auth_error:
-            return auth_error
-
         response, status = get_evaluation(id)
         if status != 200:
              return f"Avaliação com ID {id} não encontrada."
@@ -310,10 +276,6 @@ def listar_avaliacoes():
     Retorna ID, Endereço, Bairro e Preço Estimado.
     """
     try:
-        auth_error = _require_authenticated_tool_context()
-        if auth_error:
-            return auth_error
-
         response, status = get_evaluations()
         if status != 200:
             return "Erro ao listar avaliações."
@@ -340,10 +302,6 @@ def alterar_avaliacao(id: int, campo: str, novo_valor: str):
     Campos permitidos: owner_name, appraiser_name, estimated_price, rounded_price, description, classification, purpose, property_type, bedrooms, bathrooms, parking_spaces, area.
     """
     try:
-        auth_error = _require_authenticated_tool_context()
-        if auth_error:
-            return auth_error
-
         data = {}
         if campo in ['estimated_price', 'rounded_price', 'area']:
             data[campo] = float(novo_valor)
@@ -368,10 +326,6 @@ def deletar_avaliacao(id: int):
     Remove uma avaliação do banco de dados pelo ID.
     """
     try:
-        auth_error = _require_authenticated_tool_context()
-        if auth_error:
-            return auth_error
-
         response, status = delete_evaluation(id)
         if status != 200:
              return f"Erro ao deletar avaliação: {response.get_json().get('error')}"
@@ -386,10 +340,6 @@ def ler_imovel_base(id: int):
     Busca os detalhes de um imóvel base (comparativo) pelo seu ID.
     """
     try:
-        auth_error = _require_authenticated_tool_context()
-        if auth_error:
-            return auth_error
-
         response, status = get_base_listing(id)
         if status != 200:
             return f"Imóvel base com ID {id} não encontrado."
@@ -405,10 +355,6 @@ def alterar_imovel_base(id: int, campo: str, novo_valor: str):
     Campos permitidos: sample_number, address, neighborhood, city, state, link, area, bedrooms, bathrooms, parking_spaces, living_rooms, rent_value, condo_fee, type, purpose, is_active/status/situacao, deactivation_reason/motivo_desativacao.
     """
     try:
-        auth_error = _require_authenticated_tool_context()
-        if auth_error:
-            return auth_error
-
         campo_normalizado = (campo or "").strip().lower()
         valor_texto = "" if novo_valor is None else str(novo_valor).strip()
         data = {}
@@ -451,10 +397,6 @@ def deletar_imoveis_base(ids: List[int]):
     Exemplo de uso: deletar_imoveis_base([1, 2, 3])
     """
     try:
-        auth_error = _require_authenticated_tool_context()
-        if auth_error:
-            return auth_error
-
         count = 0
         for id in ids:
             response, status = delete_base_listing(id)
@@ -481,10 +423,6 @@ def adicionar_imoveis_base(evaluation_id: int, imoveis: List[Dict[str, Any]]):
     - finalidade/purpose (str): ex: Residencial
     """
     try:
-        auth_error = _require_authenticated_tool_context()
-        if auth_error:
-            return auth_error
-
         if is_evaluation_canceled(evaluation_id):
             publish_event(f"evaluation:{evaluation_id}", "cancelled", {"reason": "user_requested"})
             return f"Operacao cancelada pelo usuario para avaliacao {evaluation_id}."
