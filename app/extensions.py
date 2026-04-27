@@ -3,8 +3,14 @@ from flask_bcrypt import Bcrypt
 from flask_login import LoginManager
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from contextvars import ContextVar
+from typing import Optional
 
 db = SQLAlchemy()
+
+# Context variable used to pass the authenticated user_id to bot tools
+# that run outside of a Flask request context (background threads, etc.)
+bot_user_id_var: ContextVar[Optional[int]] = ContextVar('bot_user_id', default=None)
 bcrypt = Bcrypt()
 login_manager = LoginManager()
 cors = CORS()

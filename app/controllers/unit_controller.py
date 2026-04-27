@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 def create_unit():
     """Create a new unit."""
+    from app.utils.file_upload import prepare_logo_storage_value
+
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
     
@@ -33,7 +35,7 @@ def create_unit():
             whatsapp=data.get('whatsapp'),
             address=data.get('address'),
             cnpj=data.get('cnpj'),
-            logo_url=data.get('logo_url'),
+            logo_url=prepare_logo_storage_value(data.get('logo_url')),
             custom_fields=data.get('custom_fields', {})
         )
         
@@ -93,6 +95,8 @@ def list_user_units():
 
 def update_unit(unit_id):
     """Update a unit (admin/manager only)."""
+    from app.utils.file_upload import prepare_logo_storage_value
+
     if not request.is_json:
         return jsonify({"error": "Request must be JSON"}), 400
     
@@ -120,7 +124,7 @@ def update_unit(unit_id):
         if 'cnpj' in data:
             unit.cnpj = data['cnpj']
         if 'logo_url' in data:
-            unit.logo_url = data['logo_url']
+            unit.logo_url = prepare_logo_storage_value(data['logo_url'])
         if 'custom_fields' in data:
             unit.custom_fields = data['custom_fields']
         
@@ -513,7 +517,14 @@ def upload_unit_logo(unit_id):
     Only accessible by admins/managers of the unit.
     """
     from flask import request
-    from app.utils.file_upload import save_logo, delete_logo, get_logo_url
+    from app.utils.file_upload import (
+        save_logo,
+        delete_logo,
+        resolve_logo_public_url,
+        get_logo_storage_key,
+        is_logo_url_local,
+        extract_logo_filename,
+    )
     
     # Get current user
     current_user_id = get_jwt_identity()
@@ -543,11 +554,9 @@ def upload_unit_logo(unit_id):
     
     try:
         # Delete old logo if exists
-        if unit.logo_url:
-            # Extract filename from URL if it's a local file
-            if unit.logo_url.startswith('/api/uploads/'):
-                old_filename = unit.logo_url.split('/')[-1]
-                delete_logo(old_filename)
+        if unit.logo_url and is_logo_url_local(unit.logo_url):
+            old_filename = extract_logo_filename(unit.logo_url)
+            delete_logo(old_filename)
         
         # Save new logo
         success, result = save_logo(file, unit_id)
@@ -555,15 +564,15 @@ def upload_unit_logo(unit_id):
         if not success:
             return jsonify({"error": result}), 400
         
-        # Update unit with new logo URL
-        unit.logo_url = get_logo_url(result)
+        # Persist only storage key for portability across domains/environments
+        unit.logo_url = get_logo_storage_key(result)
         db.session.commit()
         
         logger.info(f"Logo uploaded for unit {unit.name} (ID: {unit_id})")
         
         return jsonify({
             "message": "Logo uploaded successfully",
-            "logo_url": unit.logo_url
+            "logo_url": resolve_logo_public_url(unit.logo_url)
         }), 200
         
     except Exception as e:
@@ -576,7 +585,7 @@ def delete_unit_logo(unit_id):
     Delete the logo of a unit.
     Only accessible by admins/managers of the unit.
     """
-    from app.utils.file_upload import delete_logo
+    from app.utils.file_upload import delete_logo, is_logo_url_local, extract_logo_filename
     
     # Get current user
     current_user_id = get_jwt_identity()
@@ -600,8 +609,8 @@ def delete_unit_logo(unit_id):
     
     try:
         # Delete logo file if it's a local file
-        if unit.logo_url and unit.logo_url.startswith('/api/uploads/'):
-            filename = unit.logo_url.split('/')[-1]
+        if unit.logo_url and is_logo_url_local(unit.logo_url):
+            filename = extract_logo_filename(unit.logo_url)
             delete_logo(filename)
         
         # Clear logo_url in database

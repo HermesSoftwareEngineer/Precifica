@@ -20,7 +20,7 @@ from app.bot.llms import llm_main
 from app.models.chat import Conversation, Message
 from app.models.evaluation import Evaluation
 from app.models.user import User
-from app.extensions import db
+from app.extensions import db, bot_user_id_var
 from flask_jwt_extended import get_jwt_identity, verify_jwt_in_request
 from datetime import datetime
 from app.services.sse import publish_event
@@ -91,6 +91,18 @@ def chat():
     # Use conversation_id as thread_id for LangGraph memory
     config = {"configurable": {"thread_id": str(conversation.id)}}
 
+    # Propagate user_id so that bot tools can call evaluation controllers
+    _bot_uid = conversation.user_id if conversation.user_id else None
+    if _bot_uid is None:
+        try:
+            verify_jwt_in_request(optional=True)
+            _jwt_id = get_jwt_identity()
+            if _jwt_id is not None:
+                _bot_uid = int(_jwt_id)
+        except Exception:
+            pass
+    bot_user_id_var.set(_bot_uid)
+
     try:
         # O input para o graph deve ser compatível com o que está definido no State
         logger.info(f"Invoking graph for conversation {conversation_id}")
@@ -144,8 +156,11 @@ def _extract_ai_message(ai_message_content):
         return "\n".join(text_parts)
     return str(ai_message_content)
 
-def _start_background_response(app, conversation_id, full_input, channel_key, use_tuple_list, evaluation_id=None):
+def _start_background_response(app, conversation_id, full_input, channel_key, use_tuple_list, evaluation_id=None, user_id=None):
     def run():
+        # Set bot user context so evaluation controller tools work without a request context
+        if user_id is not None:
+            bot_user_id_var.set(user_id)
         with app.app_context():
             def publish_cancel_message(conversation):
                 cancel_text = (
@@ -292,7 +307,17 @@ def chat_async():
     )
 
     app = current_app._get_current_object()
-    _start_background_response(app, conversation.id, user_input, channel_key, use_tuple_list=False)
+    # Resolve user_id for bot context (prefer conversation record, fall back to JWT)
+    _bot_uid = conversation.user_id if conversation.user_id else None
+    if _bot_uid is None:
+        try:
+            verify_jwt_in_request(optional=True)
+            _jwt_id = get_jwt_identity()
+            if _jwt_id is not None:
+                _bot_uid = int(_jwt_id)
+        except Exception:
+            pass
+    _start_background_response(app, conversation.id, user_input, channel_key, use_tuple_list=False, user_id=_bot_uid)
 
     return jsonify({
         'status': 'queued',
@@ -347,6 +372,18 @@ def run_evaluation_chat(evaluation_id, user_input, force_new_chat=False, user_id
 
     # 4. Invocar o Graph
     config = {"configurable": {"thread_id": str(conversation.id)}}
+
+    # Propagate user_id so that bot tools can call evaluation controllers
+    _bot_uid = user_id or (conversation.user_id if conversation.user_id else None)
+    if _bot_uid is None:
+        try:
+            verify_jwt_in_request(optional=True)
+            _jwt_id = get_jwt_identity()
+            if _jwt_id is not None:
+                _bot_uid = int(_jwt_id)
+        except Exception:
+            pass
+    bot_user_id_var.set(_bot_uid)
 
     try:
         logger.info(f"Invoking graph for conversation {conversation.id}")
@@ -413,7 +450,12 @@ def _prepare_evaluation_conversation(evaluation_id, user_input, force_new_chat=F
             except Exception:
                 user_id = None
 
-        conversation = Conversation(user_id=user_id, title=f"Ajuste Avaliacao #{evaluation_id}", evaluation_id=evaluation_id)
+        conversation = Conversation(
+            user_id=user_id,
+            unit_id=evaluation.unit_id,
+            title=f"Ajuste Avaliacao #{evaluation_id}",
+            evaluation_id=evaluation_id
+        )
         db.session.add(conversation)
         db.session.flush()
 
@@ -458,13 +500,24 @@ def chat_evaluation_async(evaluation_id):
     )
 
     app = current_app._get_current_object()
+    # Resolve user_id for bot context (prefer conversation record, fall back to JWT)
+    _bot_uid = conversation.user_id if conversation.user_id else None
+    if _bot_uid is None:
+        try:
+            verify_jwt_in_request(optional=True)
+            _jwt_id = get_jwt_identity()
+            if _jwt_id is not None:
+                _bot_uid = int(_jwt_id)
+        except Exception:
+            pass
     _start_background_response(
         app,
         conversation.id,
         full_input,
         channel_key,
         use_tuple_list=True,
-        evaluation_id=evaluation_id
+        evaluation_id=evaluation_id,
+        user_id=_bot_uid
     )
 
     return jsonify({
@@ -500,13 +553,16 @@ def enqueue_evaluation_chat(evaluation_id, user_input, force_new_chat=False, use
     )
 
     app = current_app._get_current_object()
+    # Resolve user_id for bot context (prefer passed-in user_id, then conversation record)
+    _bot_uid = user_id or (conversation.user_id if conversation.user_id else None)
     _start_background_response(
         app,
         conversation.id,
         full_input,
         channel_key,
         use_tuple_list=True,
-        evaluation_id=evaluation_id
+        evaluation_id=evaluation_id,
+        user_id=_bot_uid
     )
 
     return conversation, user_msg, None, 200

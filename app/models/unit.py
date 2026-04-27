@@ -2,6 +2,7 @@ from app.extensions import db
 from datetime import datetime
 from sqlalchemy import event
 import json
+from flask import has_app_context
 
 # Association table for M2M relationship between User and Unit
 user_units = db.Table(
@@ -88,6 +89,14 @@ class Unit(db.Model):
         return role in ['admin', 'manager']
     
     def to_dict(self, include_users=False):
+        resolved_logo_url = self.logo_url
+        if self.logo_url and has_app_context():
+            try:
+                from app.utils.file_upload import resolve_logo_public_url
+                resolved_logo_url = resolve_logo_public_url(self.logo_url)
+            except Exception:
+                resolved_logo_url = self.logo_url
+
         data = {
             'id': self.id,
             'name': self.name,
@@ -96,7 +105,7 @@ class Unit(db.Model):
             'whatsapp': self.whatsapp,
             'address': self.address,
             'cnpj': self.cnpj,
-            'logo_url': self.logo_url,
+            'logo_url': resolved_logo_url,
             'custom_fields': self.custom_fields or {},
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None

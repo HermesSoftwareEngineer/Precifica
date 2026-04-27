@@ -352,18 +352,33 @@ def ler_imovel_base(id: int):
 def alterar_imovel_base(id: int, campo: str, novo_valor: str):
     """
     Atualiza um campo específico de um imóvel base (comparativo).
-    Campos permitidos: sample_number, address, neighborhood, city, state, link, area, bedrooms, bathrooms, parking_spaces, rent_value, condo_fee, type, purpose.
+    Campos permitidos: sample_number, address, neighborhood, city, state, link, area, bedrooms, bathrooms, parking_spaces, living_rooms, rent_value, condo_fee, type, purpose, is_active/status/situacao, deactivation_reason/motivo_desativacao.
     """
     try:
+        campo_normalizado = (campo or "").strip().lower()
+        valor_texto = "" if novo_valor is None else str(novo_valor).strip()
         data = {}
-        if campo == 'sample_number':
-            data[campo] = int(novo_valor) if novo_valor else None
-        elif campo in ['area', 'rent_value', 'condo_fee']:
-             data[campo] = float(novo_valor)
-        elif campo in ['bedrooms', 'bathrooms', 'parking_spaces', 'living_rooms']:
-             data[campo] = int(novo_valor)
-        elif campo in ['address', 'neighborhood', 'city', 'state', 'link', 'type', 'purpose']:
-             data[campo] = novo_valor
+        if campo_normalizado == 'sample_number':
+            data['sample_number'] = int(valor_texto) if valor_texto else None
+        elif campo_normalizado in ['area', 'rent_value', 'condo_fee']:
+            data[campo_normalizado] = float(valor_texto)
+        elif campo_normalizado in ['bedrooms', 'bathrooms', 'parking_spaces', 'living_rooms']:
+            data[campo_normalizado] = int(valor_texto)
+        elif campo_normalizado in ['address', 'neighborhood', 'city', 'state', 'link', 'type', 'purpose']:
+            data[campo_normalizado] = novo_valor
+        elif campo_normalizado in ['is_active', 'status', 'situacao', 'ativo', 'active']:
+            valor_bool = valor_texto.lower()
+            if valor_bool in ['true', '1', 'sim', 'ativo', 'ativa', 'yes', 'on']:
+                data['is_active'] = True
+            elif valor_bool in ['false', '0', 'nao', 'não', 'inativo', 'inativa', 'no', 'off']:
+                data['is_active'] = False
+            else:
+                return (
+                    "Valor inválido para status/situacao. "
+                    "Use: ativo/inativo, true/false, 1/0, sim/nao."
+                )
+        elif campo_normalizado in ['deactivation_reason', 'motivo_desativacao', 'motivo_desativação']:
+            data['deactivation_reason'] = novo_valor
         else:
             return f"Campo '{campo}' não é válido ou não pode ser alterado por esta ferramenta."
             

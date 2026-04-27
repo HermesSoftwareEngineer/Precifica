@@ -1,8 +1,9 @@
 import os
 from datetime import datetime, timedelta, timezone
-from flask import Flask
+from flask import Flask, abort
 from flask_cors import CORS
 from flask_jwt_extended import create_access_token, get_jwt, get_jwt_identity
+from werkzeug.utils import safe_join
 from config import Config
 from app.extensions import db, bcrypt, login_manager, cors, jwt
 
@@ -66,13 +67,55 @@ def create_app(config_class=Config):
     app.register_blueprint(bot_bp)
     app.register_blueprint(conversation_bp)
     app.register_blueprint(dashboard_bp)
+
+    configured_upload_root = os.path.abspath(app.config['UPLOAD_FOLDER'])
+    local_upload_root = os.path.abspath(os.path.join(app.root_path, '..', 'uploads'))
+    configured_unit_logo_root = os.path.abspath(app.config['UNIT_LOGO_FOLDER'])
+    local_unit_logo_root = os.path.abspath(os.path.join(local_upload_root, 'unit_logos'))
+
+    try:
+        os.makedirs(configured_upload_root, exist_ok=True)
+        os.makedirs(configured_unit_logo_root, exist_ok=True)
+    except OSError as exc:
+        app.logger.warning(
+            "Falha ao usar UPLOAD_FOLDER configurado (%s). Usando fallback local (%s). Erro: %s",
+            configured_upload_root,
+            local_upload_root,
+            exc,
+        )
+        os.makedirs(local_upload_root, exist_ok=True)
+        os.makedirs(local_unit_logo_root, exist_ok=True)
+        app.config['UPLOAD_FOLDER'] = local_upload_root
+        app.config['UNIT_LOGO_FOLDER'] = local_unit_logo_root
+        configured_upload_root = local_upload_root
+        configured_unit_logo_root = local_unit_logo_root
     
     # Serve uploaded files
     from flask import send_from_directory
     @app.route('/api/uploads/<path:folder>/<path:filename>')
     def serve_upload(folder, filename):
         """Serve uploaded files"""
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], folder)
-        return send_from_directory(upload_path, filename)
+        # Support configured shared storage and local fallback for legacy files.
+        candidate_roots = [configured_upload_root]
+        if os.path.normcase(local_upload_root) != os.path.normcase(configured_upload_root):
+            candidate_roots.append(local_upload_root)
+
+        for root in candidate_roots:
+            upload_path = safe_join(root, folder)
+            if not upload_path:
+                continue
+            file_path = safe_join(upload_path, filename)
+            if not file_path:
+                continue
+            if os.path.isfile(file_path):
+                return send_from_directory(upload_path, filename)
+
+        app.logger.warning(
+            "Uploaded file not found. folder=%s filename=%s roots=%s",
+            folder,
+            filename,
+            candidate_roots
+        )
+        return abort(404)
 
     return app

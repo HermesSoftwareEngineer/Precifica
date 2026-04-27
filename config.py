@@ -4,6 +4,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
+
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev_key_change_in_production'
     JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or 'jwt_secret_key_change_in_production'
@@ -16,7 +23,12 @@ class Config:
     DEBUG = True
     FRONTEND_URL = os.environ.get('FRONTEND_URL')
     # Upload configuration
-    UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'uploads'
+    )
     UNIT_LOGO_FOLDER = os.path.join(UPLOAD_FOLDER, 'unit_logos')
+    UPLOAD_PUBLIC_BASE_URL = (os.environ.get('UPLOAD_PUBLIC_BASE_URL') or '').rstrip('/')
+    ENABLE_LEGACY_UPLOAD_FALLBACK = _env_bool('ENABLE_LEGACY_UPLOAD_FALLBACK', True)
     MAX_CONTENT_LENGTH = 5 * 1024 * 1024  # 5MB max file size
     ALLOWED_LOGO_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
